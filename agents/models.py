@@ -21,7 +21,6 @@ class UserProfile(BaseModel):
 class AffordabilityInfo(BaseModel):
     recommended_max_rent: int
     credit_band: str
-    budget_vs_recommended: Literal["below", "near", "above"]
 
 class MoveCashNeeded(BaseModel):
     deposits: int

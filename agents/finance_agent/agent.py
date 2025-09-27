@@ -15,14 +15,6 @@ class FinanceAgent:
         # Calculate recommended max rent (30% rule)
         recommended_max_rent = int(profile.salary * 0.30 / 12)
 
-        # Determine budget vs recommended comparison
-        if profile.budget < recommended_max_rent * 0.9:
-            budget_vs_recommended = "below"
-        elif profile.budget <= recommended_max_rent * 1.1:
-            budget_vs_recommended = "near"
-        else:
-            budget_vs_recommended = "above"
-
         # Calculate move-in costs
         deposits = profile.budget * 2  # first + last month
         moving = 800  # estimated moving costs
@@ -66,7 +58,6 @@ class FinanceAgent:
         affordability = AffordabilityInfo(
             recommended_max_rent=recommended_max_rent,
             credit_band=profile.credit_band,
-            budget_vs_recommended=budget_vs_recommended
         )
 
         move_cash_needed = MoveCashNeeded(
