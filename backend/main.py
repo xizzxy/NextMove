@@ -38,7 +38,7 @@ async def plan_move(profile: UserProfile):
         summary = MovePlanSummary(
             headline=f"Personalized move plan for {profile.city}",
             top_apartment=housing_results.housing_recommendations[0].dict() if housing_results.housing_recommendations else None,
-            job_target=career_results.job_recommendations.recruiter_targets[0].dict() if career_results.job_recommendations.recruiter_targets else None,
+            job_target=career_results.job_recommendations.job_matches[0].dict() if career_results.job_recommendations.job_matches else None,
             cash_needed=finance_results.move_cash_needed.total,
             neighborhood=lifestyle_results.primary_fit,
         )

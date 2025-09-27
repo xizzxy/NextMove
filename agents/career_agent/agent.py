@@ -4,7 +4,7 @@ import json
 import requests
 from google import genai
 from google.genai.types import GenerateContentConfig, HttpOptions
-from ..models import UserProfile, CareerOutput, JobRecommendations, JobMatch, RecruiterTarget, EmailDraft
+from ..models import UserProfile, CareerOutput, JobRecommendations, JobMatch
 class CareerAgent:
     def __init__(self):
         self.client = genai.Client(
@@ -34,19 +34,8 @@ class CareerAgent:
             ) for job in jobs_data[:5]  # Limit to 5 jobs
         ]
 
-        # Create recruiter targets (top 3 companies)
-        recruiter_targets = [
-            RecruiterTarget(company=job.company, role=job.title)
-            for job in job_matches[:3]
-        ]
-
-        # Generate email drafts using Gemini
-        email_drafts = await self._generate_email_drafts(recruiter_targets, profile)
-
         job_recommendations = JobRecommendations(
-            job_matches=job_matches,
-            recruiter_targets=recruiter_targets,
-            email_drafts=email_drafts
+            job_matches=job_matches
         )
 
         return CareerOutput(job_recommendations=job_recommendations)
@@ -81,58 +70,6 @@ class CareerAgent:
 
         return base_jobs
 
-    async def _generate_email_drafts(self, recruiter_targets: list[RecruiterTarget], profile: UserProfile) -> list[EmailDraft]:
-        """Generate personalized email drafts using Gemini"""
-        email_drafts = []
-
-        for target in recruiter_targets:
-            prompt = f"""
-            Write a professional, concise email to a recruiter for the {target.role} position at {target.company}.
-
-            Candidate profile:
-            - Career: {profile.career_path}
-            - Experience: {profile.experience_years} years
-            - Relocating to: {profile.city}
-            - Interests: {', '.join(profile.interests)}
-
-            The email should be:
-            - Professional but personable
-            - 3-4 sentences maximum
-            - Express genuine interest in the company
-            - Mention relocation plans
-            - Request a brief conversation
-
-            Respond with ONLY the email body text, no subject line or greeting.
-            """
-
-            try:
-                response = self.client.models.generate_content(
-                    model="gemini-1.5-pro",
-                    contents=prompt,
-                    config=GenerateContentConfig(
-                        temperature=0.7,
-                        max_output_tokens=300
-                    )
-                )
-                email_body = response.text.strip()
-            except Exception:
-                # Fallback email template
-                email_body = (
-                    f"I'm a {profile.career_path} with {profile.experience_years} years of experience, "
-                    f"and I'm planning to relocate to {profile.city}. "
-                    f"I'm very interested in the {target.role} opportunity at {target.company} "
-                    f"and would love to discuss how my background might be a fit. "
-                    f"Would you be available for a brief conversation about this role?"
-                )
-
-            email_draft = EmailDraft(
-                to=f"recruiter@{target.company.lower().replace(' ', '')}.com",
-                subject=f"Interest in {target.role} role – relocating to {profile.city}",
-                body=f"Hi {{recruiter_name}},\n\n{email_body}\n\nBest regards,\n{profile.name}"
-            )
-            email_drafts.append(email_draft)
-
-        return email_drafts
 
     async def _search_linkedin_jobs(self, profile: UserProfile) -> list:
         """Search for real jobs using Harvest LinkedIn API based on user profile"""

@@ -71,19 +71,8 @@ class JobMatch(BaseModel):
     location: str
     salary_range: Optional[str] = None
 
-class RecruiterTarget(BaseModel):
-    company: str
-    role: str
-
-class EmailDraft(BaseModel):
-    to: str
-    subject: str
-    body: str
-
 class JobRecommendations(BaseModel):
     job_matches: List[JobMatch]
-    recruiter_targets: List[RecruiterTarget]
-    email_drafts: List[EmailDraft]
 
 class CareerOutput(BaseModel):
     job_recommendations: JobRecommendations

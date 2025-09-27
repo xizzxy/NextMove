@@ -67,8 +67,6 @@ async def test_agents():
         career_agent = CareerAgent()
         career_results = await career_agent.run(sample_profile)
         print(f"Career: Found {len(career_results.job_recommendations.job_matches)} job matches")
-        print(f"  Recruiter targets: {len(career_results.job_recommendations.recruiter_targets)}")
-        print(f"  Email drafts: {len(career_results.job_recommendations.email_drafts)}")
         if career_results.job_recommendations.job_matches:
             top_job = career_results.job_recommendations.job_matches[0]
             print(f"  Top job: {top_job.title} at {top_job.company}")
