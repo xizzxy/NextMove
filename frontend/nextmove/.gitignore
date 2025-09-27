@@ -12,8 +12,6 @@
 
 # testing
 /coverage
-.idea
-.next
 
 # next.js
 /.next/
@@ -41,7 +39,3 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
-# idea
-.idea/inspectionProfiles
-.idea/vcs.xml
