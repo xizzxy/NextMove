@@ -99,6 +99,9 @@ async def plan_move(request: Request, profile: UserProfile):
 
         logger.info("Successfully generated move plan")
 
+        # Notes for any issues (currently none)
+        notes = []
+
         # Build response
         response_data = {
             "status": "success",

@@ -23,16 +23,33 @@ class CareerAgent:
             gemini_jobs = await self._enhance_with_gemini(profile, jobs_data)
             jobs_data.extend(gemini_jobs)
 
-        # Convert to JobMatch objects
-        job_matches = [
-            JobMatch(
+        # Ensure we have exactly 15 jobs
+        while len(jobs_data) < 15:
+            fallback_jobs = self._generate_fallback_jobs(profile)
+            for job in fallback_jobs:
+                if len(jobs_data) < 15:
+                    # Add some variation to avoid duplicates
+                    job["title"] = f"{job['title']} #{len(jobs_data) + 1}"
+                    jobs_data.append(job)
+                else:
+                    break
+
+        # Ensure salary diversity and calculate match scores
+        jobs_data = self._ensure_salary_diversity(jobs_data, profile)
+
+        # Convert to JobMatch objects with match scores
+        job_matches = []
+        for job in jobs_data[:15]:  # Exactly 15 jobs
+            match_score = self._calculate_job_match_score(job, profile)
+            job_match = JobMatch(
                 title=job["title"],
                 company=job["company"],
                 location=job["location"],
                 salary_range=job.get("salary_range"),
-                apply_url=job.get("apply_url")
-            ) for job in jobs_data[:5]  # Limit to 5 jobs
-        ]
+                apply_url=job.get("apply_url"),
+                match_score=match_score
+            )
+            job_matches.append(job_match)
 
         job_recommendations = JobRecommendations(
             job_matches=job_matches
@@ -48,6 +65,16 @@ class CareerAgent:
             {"title": "Data Analyst", "company": "DataInsights"},
             {"title": "Full Stack Developer", "company": "AppBuilder"},
             {"title": "DevOps Engineer", "company": "CloudTech"},
+            {"title": "Backend Developer", "company": "ServerTech"},
+            {"title": "Product Manager", "company": "InnovateCorp"},
+            {"title": "UX Designer", "company": "DesignStudio"},
+            {"title": "Data Scientist", "company": "AnalyticsPro"},
+            {"title": "QA Engineer", "company": "QualityFirst"},
+            {"title": "Machine Learning Engineer", "company": "AITech"},
+            {"title": "System Administrator", "company": "NetworkSol"},
+            {"title": "Mobile Developer", "company": "AppMakers"},
+            {"title": "Security Engineer", "company": "CyberGuard"},
+            {"title": "Database Administrator", "company": "DataCore"},
         ]
 
         # Adjust titles based on experience
@@ -340,3 +367,117 @@ class CareerAgent:
             max_sal = int(max_sal * 1.4)
 
         return f"${min_sal:,} - ${max_sal:,}"
+
+    def _calculate_job_match_score(self, job: dict, profile: UserProfile) -> int:
+        """Calculate match score using formula: 0.6*career_relevance + 0.25*salary_score + 0.15*distance_score"""
+        import random
+
+        # Career relevance (60% weight)
+        career_relevance = self._calculate_career_relevance(job["title"], profile.career_path)
+
+        # Salary score (25% weight) - higher salaries get higher scores
+        salary_score = self._calculate_salary_score(job.get("salary_range", ""), profile)
+
+        # Distance score (15% weight) - assume all jobs in same city get high score
+        distance_score = 90 if job["location"].lower() == profile.city.lower() else 50
+
+        # Combine scores with weights
+        match = (0.6 * career_relevance + 0.25 * salary_score + 0.15 * distance_score)
+
+        # Add jitter to avoid ties (±2 points)
+        jitter = (random.random() - 0.5) * 4  # -2 to +2
+        final_score = max(0, min(100, int(match + jitter)))
+
+        return final_score
+
+    def _calculate_career_relevance(self, job_title: str, career_path: str) -> float:
+        """Calculate how relevant a job title is to user's career path"""
+        job_lower = job_title.lower()
+        career_lower = career_path.lower()
+
+        # Exact match
+        if career_lower in job_lower or job_lower in career_lower:
+            return 100
+
+        # Keyword overlap
+        job_words = set(job_lower.split())
+        career_words = set(career_lower.split())
+        common_words = job_words.intersection(career_words)
+
+        if common_words:
+            overlap_ratio = len(common_words) / max(len(job_words), len(career_words))
+            return min(100, 60 + (overlap_ratio * 40))
+
+        # Default relevance for same field
+        if any(word in job_lower for word in ["engineer", "developer", "analyst", "manager"]):
+            return 70
+
+        return 50  # Base relevance
+
+    def _calculate_salary_score(self, salary_range: str, profile: UserProfile) -> float:
+        """Calculate salary score - higher salaries get higher scores within reasonable bounds"""
+        if not salary_range or not profile.salary:
+            return 50  # neutral score
+
+        try:
+            # Extract numeric values from salary range
+            import re
+            numbers = re.findall(r'[\d,]+', salary_range.replace(',', ''))
+            if len(numbers) >= 2:
+                min_sal = int(numbers[0])
+                max_sal = int(numbers[1])
+                avg_salary = (min_sal + max_sal) / 2
+
+                # Score based on how salary compares to user expectation
+                if avg_salary >= profile.salary:
+                    # Higher than expected - good score
+                    ratio = min(1.5, avg_salary / profile.salary)  # Cap at 1.5x
+                    return min(100, 60 + ((ratio - 1) * 80))  # 60-100 range
+                else:
+                    # Lower than expected - reduced score
+                    ratio = avg_salary / profile.salary
+                    return max(20, ratio * 60)  # 20-60 range
+        except:
+            pass
+
+        return 50  # Default score
+
+    def _ensure_salary_diversity(self, jobs_data: list, profile: UserProfile) -> list:
+        """Ensure all jobs have unique salary ranges with jitter"""
+        import random
+
+        seen_ranges = set()
+        for job in jobs_data:
+            original_range = job.get("salary_range")
+            if not original_range:
+                # Generate salary if missing
+                job["salary_range"] = self._estimate_salary_range(profile, job["title"])
+
+            # Add jitter to avoid duplicates
+            salary_range = job["salary_range"]
+            counter = 0
+            while salary_range in seen_ranges and counter < 10:
+                # Extract numbers and add jitter
+                try:
+                    import re
+                    numbers = re.findall(r'[\d,]+', salary_range.replace(',', ''))
+                    if len(numbers) >= 2:
+                        min_sal = int(numbers[0])
+                        max_sal = int(numbers[1])
+
+                        # Add ±5-10% jitter
+                        jitter_pct = (random.random() - 0.5) * 0.2  # ±10%
+                        min_sal = int(min_sal * (1 + jitter_pct))
+                        max_sal = int(max_sal * (1 + jitter_pct))
+
+                        salary_range = f"${min_sal:,} - ${max_sal:,}"
+                        counter += 1
+                except:
+                    # Fallback: add suffix
+                    salary_range = f"{original_range} (Negotiable)"
+                    break
+
+            job["salary_range"] = salary_range
+            seen_ranges.add(salary_range)
+
+        return jobs_data

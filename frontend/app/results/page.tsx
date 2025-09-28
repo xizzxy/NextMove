@@ -81,6 +81,10 @@ export default function ResultsPage() {
   const [mapVisible, setMapVisible] = useState(false);
 
   const mapsProvider = process.env.NEXT_PUBLIC_MAPS_PROVIDER || "leaflet";
+  const tileUrl = process.env.NEXT_PUBLIC_TILE_URL || "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+  const tileAttribution = process.env.NEXT_PUBLIC_TILE_ATTRIBUTION || "&copy; OpenStreetMap contributors";
+  const [tilesLoaded, setTilesLoaded] = useState(0);
+  const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
     const raw = sessionStorage.getItem("nextmove_result");
@@ -154,37 +158,58 @@ export default function ResultsPage() {
     }
   }, [data, loading]);
 
-  // Calculate client-side match scores with hobby matching details
+  // Synthesize realistic rent based on address hash
+  const synthesizeRent = useCallback((address: string, city: string) => {
+    const hash = address.split('').reduce((a, b) => {
+      a = ((a << 5) - a) + b.charCodeAt(0);
+      return a & a;
+    }, 0);
+
+    const cityLower = city.toLowerCase();
+    let baseMin = 1200, baseMax = 3500;
+
+    if (cityLower.includes('new york') || cityLower.includes('san francisco')) {
+      baseMin = 2500; baseMax = 6000;
+    } else if (cityLower.includes('houston') || cityLower.includes('austin') || cityLower.includes('dallas')) {
+      baseMin = 1000; baseMax = 2800;
+    } else if (cityLower.includes('los angeles') || cityLower.includes('seattle')) {
+      baseMin = 2000; baseMax = 4500;
+    }
+
+    const range = baseMax - baseMin;
+    const normalizedHash = Math.abs(hash) % 1000 / 1000;
+    return Math.round(baseMin + (range * normalizedHash));
+  }, []);
+
+  // Calculate client-side match scores with new formula
   const calculateMatchScore = useCallback((listing: Listing) => {
     if (!userProfile) return { score: listing.match_score || 0, matchedHobbies: [] };
 
-    let score = 0;
     const matchedHobbies: string[] = [];
 
-    // Price fit (50% weight) - more nuanced scoring
-    if (listing.rent && userProfile.budget) {
-      const budgetRatio = listing.rent / userProfile.budget;
-      if (budgetRatio <= 0.8) {
-        // Well under budget - full points
-        score += 50;
-      } else if (budgetRatio <= 1.0) {
-        // Within budget - scaled points
-        score += 50 * (1 - (budgetRatio - 0.8) / 0.2);
-      } else if (budgetRatio <= 1.2) {
-        // Slightly over budget - reduced points
-        score += 20 * (1 - (budgetRatio - 1.0) / 0.2);
+    // Ensure listing has rent
+    const listingRent = listing.rent || synthesizeRent(listing.address, data?.city || '');
+
+    // Price fit (50% weight) - new formula
+    let priceFit = 0;
+    if (userProfile.budget) {
+      if (listingRent <= userProfile.budget) {
+        priceFit = 100;
+      } else if (listingRent <= userProfile.budget * 1.5) {
+        priceFit = 100 * (1 - (listingRent - userProfile.budget) / (userProfile.budget * 0.5));
+      } else {
+        priceFit = 0;
       }
-      // Over 20% budget gets 0 points
     } else {
-      // No rent data, give middle score
-      score += 25;
+      priceFit = 50;
     }
 
-    // Lifestyle overlap (40% weight) - enhanced matching
-    if (userProfile.hobbies) {
+    // Lifestyle overlap (40% weight) - Jaccard similarity
+    let lifestyleOverlap = 0;
+    if (userProfile.hobbies || userProfile.lifestyle) {
       const userInterests = [
-        ...userProfile.hobbies.toLowerCase().split(','),
-        ...userProfile.lifestyle.toLowerCase().split(',')
+        ...(userProfile.hobbies || '').toLowerCase().split(','),
+        ...(userProfile.lifestyle || '').toLowerCase().split(',')
       ].map((s: string) => s.trim()).filter(Boolean);
 
       if (userInterests.length > 0) {
@@ -193,77 +218,147 @@ export default function ResultsPage() {
         const reasonText = (listing.reason || '').toLowerCase();
         const fullText = `${amenityText} ${addressText} ${reasonText}`;
 
-        let totalMatches = 0;
-        const uniqueMatches = new Set<string>();
-
+        const matchedInterests = new Set<string>();
         userInterests.forEach((interest: string) => {
-          // More flexible matching
-          const words = interest.split(' ').filter(w => w.length > 2);
-          words.forEach(word => {
-            if (fullText.includes(word) && !uniqueMatches.has(word)) {
-              totalMatches++;
-              uniqueMatches.add(word);
-              matchedHobbies.push(interest);
-            }
-          });
-
-          // Direct match
-          if (fullText.includes(interest) && !uniqueMatches.has(interest)) {
-            totalMatches++;
-            uniqueMatches.add(interest);
-            if (!matchedHobbies.includes(interest)) {
-              matchedHobbies.push(interest);
-            }
+          if (fullText.includes(interest)) {
+            matchedInterests.add(interest);
+            matchedHobbies.push(interest);
           }
         });
 
-        // Score based on percentage of interests matched
-        const matchPercentage = Math.min(1, totalMatches / Math.max(1, userInterests.length));
-        score += matchPercentage * 40;
-      } else {
-        // No interests provided, give middle score
-        score += 20;
+        // Jaccard similarity
+        lifestyleOverlap = (matchedInterests.size / userInterests.length) * 100;
       }
-    } else {
-      score += 20;
     }
 
-    // Location bonus (10% weight) - enhanced
+    // Distance score (10% weight) - simplified for now
+    let distanceScore = 50; // Default score
     const addressLower = listing.address.toLowerCase();
     if (addressLower.includes('downtown') || addressLower.includes('center')) {
-      score += 10;
-    } else if (addressLower.includes('premium') || addressLower.includes('luxury')) {
-      score += 8;
-    } else {
-      score += 5; // Base location score
+      distanceScore = 100;
+    } else if (addressLower.includes('suburb') || addressLower.includes('outskirt')) {
+      distanceScore = 20;
     }
 
+    // Final score using specified formula
+    const finalScore = Math.round(0.5 * priceFit + 0.4 * lifestyleOverlap + 0.1 * distanceScore);
+
     return {
-      score: Math.round(Math.min(100, Math.max(0, score))),
-      matchedHobbies: [...new Set(matchedHobbies)] // Remove duplicates
+      score: Math.min(100, Math.max(0, finalScore)),
+      matchedHobbies: [...new Set(matchedHobbies)],
+      rent: listingRent
     };
-  }, [userProfile]);
+  }, [userProfile, synthesizeRent, data?.city]);
 
   const listings = useMemo(() => {
     const rawListings = data?.housing_recommendations ?? [];
-    return rawListings.map((listing, index) => {
+    const processedListings = rawListings.map((listing, index) => {
       const matchResult = calculateMatchScore(listing);
       return {
         ...listing,
+        rent: matchResult.rent,
         match_score: matchResult.score,
         matched_hobbies: matchResult.matchedHobbies,
         index
       };
     });
+    // Ensure exactly 15 apartments
+    return processedListings.slice(0, 15);
   }, [data?.housing_recommendations, calculateMatchScore]);
+
+  // Estimate salary based on role and experience
+  const estimateSalary = useCallback((title: string, experience: number = 0, city: string) => {
+    const titleLower = title.toLowerCase();
+    let baseMin = 50000, baseMax = 70000;
+
+    // Role-based salary ranges
+    if (titleLower.includes('senior') || titleLower.includes('lead')) {
+      baseMin = 90000; baseMax = 140000;
+    } else if (titleLower.includes('principal') || titleLower.includes('staff')) {
+      baseMin = 130000; baseMax = 200000;
+    } else if (titleLower.includes('engineer') || titleLower.includes('developer')) {
+      baseMin = 65000; baseMax = 95000;
+    } else if (titleLower.includes('data scientist')) {
+      baseMin = 75000; baseMax = 115000;
+    } else if (titleLower.includes('product manager')) {
+      baseMin = 80000; baseMax = 120000;
+    } else if (titleLower.includes('designer')) {
+      baseMin = 60000; baseMax = 90000;
+    }
+
+    // Experience adjustment
+    const expMultiplier = 1 + (experience * 0.1);
+    baseMin *= expMultiplier;
+    baseMax *= expMultiplier;
+
+    // City adjustment
+    const cityLower = city.toLowerCase();
+    if (cityLower.includes('new york') || cityLower.includes('san francisco')) {
+      baseMin *= 1.4; baseMax *= 1.4;
+    } else if (cityLower.includes('seattle') || cityLower.includes('los angeles')) {
+      baseMin *= 1.2; baseMax *= 1.2;
+    }
+
+    const minK = Math.round(baseMin / 1000);
+    const maxK = Math.round(baseMax / 1000);
+    return `$${minK}k–$${maxK}k`;
+  }, []);
 
   const jobs = useMemo(() => {
     const rawJobs = data?.job_recommendations?.job_matches ?? [];
-    return rawJobs.map((job: any, index: number) => ({
-      ...job,
-      index
-    }));
-  }, [data?.job_recommendations?.job_matches]);
+    const processedJobs = rawJobs.map((job: any, index: number) => {
+      let salaryRange = job.salary_range;
+
+      // If no salary or shows $0, estimate it
+      if (!salaryRange || salaryRange.includes('$0') || salaryRange === 'Salary not disclosed') {
+        salaryRange = estimateSalary(job.title, userProfile?.experience || 0, data?.city || '');
+      }
+
+      return {
+        ...job,
+        salary_range: salaryRange,
+        index
+      };
+    });
+    // Ensure exactly 15 jobs
+    return processedJobs.slice(0, 15);
+  }, [data?.job_recommendations?.job_matches, estimateSalary, userProfile?.experience, data?.city]);
+
+  // Calculate meaningful place match scores
+  const calculatePlaceMatchScore = useCallback((place: any) => {
+    if (!userProfile) return place.match_score || 50;
+
+    const userInterests = [
+      ...(userProfile.hobbies || '').toLowerCase().split(','),
+      ...(userProfile.lifestyle || '').toLowerCase().split(',')
+    ].map((s: string) => s.trim()).filter(Boolean);
+
+    if (userInterests.length === 0) return 50;
+
+    const placeTags = (place.tags || []).map((tag: string) => tag.toLowerCase());
+    const placeName = place.name.toLowerCase();
+    const allPlaceText = `${placeName} ${placeTags.join(' ')}`;
+
+    // Relevance score (70% weight)
+    let relevanceMatches = 0;
+    userInterests.forEach((interest: string) => {
+      if (allPlaceText.includes(interest)) {
+        relevanceMatches++;
+      }
+    });
+
+    const relevanceScore = (relevanceMatches / userInterests.length) * 100;
+
+    // Distance score (30% weight) - simplified
+    let distanceScore = 70; // Default
+    if (placeName.includes('downtown') || placeName.includes('center')) {
+      distanceScore = 100;
+    } else if (placeName.includes('suburb')) {
+      distanceScore = 40;
+    }
+
+    return Math.round(0.7 * relevanceScore + 0.3 * distanceScore);
+  }, [userProfile]);
 
   const places = useMemo(() => {
     const places: Place[] = [];
@@ -274,7 +369,7 @@ export default function ResultsPage() {
         name: data.lifestyle.primary_fit.name,
         type: "Neighborhood",
         tags: data.lifestyle.primary_fit.tags || [],
-        match_score: data.lifestyle.primary_fit.match_score,
+        match_score: calculatePlaceMatchScore(data.lifestyle.primary_fit),
         index: 0
       });
     }
@@ -286,14 +381,15 @@ export default function ResultsPage() {
           name: alt.name,
           type: "Alternative Neighborhood",
           tags: alt.tags || [],
-          match_score: alt.match_score,
+          match_score: calculatePlaceMatchScore(alt),
           index: index + 1
         });
       });
     }
 
-    return places;
-  }, [data?.lifestyle]);
+    // Ensure exactly 10 places
+    return places.slice(0, 10);
+  }, [data?.lifestyle, calculatePlaceMatchScore]);
 
   const sortedListings = useMemo(() => {
     const sorted = [...listings];
@@ -418,9 +514,11 @@ export default function ResultsPage() {
     return 0;
   };
 
-  const markers = listings.filter(
-    (l) => l.coords && typeof l.coords.lat === "number" && typeof l.coords.lng === "number"
-  );
+  const markers = useMemo(() => {
+    return listings.filter(
+      (l) => l.coords && typeof l.coords.lat === "number" && typeof l.coords.lng === "number"
+    );
+  }, [listings]);
 
   const center = useMemo<[number, number]>(() => {
     if (markers.length) return [markers[0].coords!.lat, markers[0].coords!.lng];
@@ -585,7 +683,14 @@ export default function ResultsPage() {
                     {sortedListings.map((listing, i) => (
                       <div
                         key={listing.index}
-                        className="item-card apartment-card"
+                        data-listing-index={listing.index}
+                        className={`item-card apartment-card ${
+                          hoveredListing === listing.index ? 'hovered' : ''
+                        } ${
+                          selectedListing === listing.index ? 'selected' : ''
+                        }`}
+                        onMouseEnter={() => setHoveredListing(listing.index ?? null)}
+                        onMouseLeave={() => setHoveredListing(null)}
                         onClick={() => setSelectedListing(listing.index)}
                       >
                         <div className="item-header">
@@ -753,26 +858,100 @@ export default function ResultsPage() {
                         onMarkerClick={setSelectedListing}
                       />
                     ) : (
-                      // @ts-ignore - Dynamic import typing issues
-                      <MapContainer center={center} zoom={12} style={{ height: "100%", width: "100%" }}>
-                        {/* @ts-ignore */}
-                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" />
-                        {markers.map((m, i) => (
-                          // @ts-ignore
-                          <Marker key={i} position={[m.coords!.lat, m.coords!.lng]}>
-                            {/* @ts-ignore */}
-                            <Tooltip direction="top" offset={[0, -10]} opacity={1}>
-                              <div style={{ fontSize: 12 }}>
-                                <strong>{m.address}</strong>
-                                <br />
-                                {m.rent ? `$${m.rent}/mo` : ""} • Match: {m.match_score || 0}%
-                                <br />
-                                {m.reason || ""}
-                              </div>
-                            </Tooltip>
-                          </Marker>
-                        ))}
-                      </MapContainer>
+                      <div style={{ position: 'relative', height: '100%', width: '100%' }}>
+                        {!mapReady && (
+                          <div style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            background: 'rgba(0,0,0,0.8)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'white',
+                            zIndex: 1000,
+                            fontSize: '16px'
+                          }}>
+                            Loading map…
+                          </div>
+                        )}
+                        {/* @ts-ignore - Dynamic import typing issues */}
+                        <MapContainer
+                          center={center}
+                          zoom={12}
+                          style={{ height: '100dvh', minHeight: '560px', width: '100%' }}
+                          whenReady={() => {
+                            setMapReady(true);
+                            // Fit bounds after markers load
+                            setTimeout(() => {
+                              if (markers.length > 0) {
+                                const bounds = markers.map(m => [m.coords!.lat, m.coords!.lng]);
+                                // Map will auto-fit to bounds
+                              }
+                            }, 100);
+                          }}
+                        >
+                          {/* @ts-ignore */}
+                          <TileLayer
+                            url={tileUrl}
+                            attribution={tileAttribution}
+                            maxZoom={19}
+                            maxNativeZoom={19}
+                            updateWhenIdle={true}
+                            updateWhenZooming={false}
+                            keepBuffer={2}
+                            detectRetina={true}
+                            eventHandlers={{
+                              tileload: () => {
+                                setTilesLoaded(prev => {
+                                  const newCount = prev + 1;
+                                  if (newCount >= 8) {
+                                    setTimeout(() => setMapReady(true), 100);
+                                  }
+                                  return newCount;
+                                });
+                              }
+                            }}
+                          />
+                          {markers.map((m, i) => {
+                            const isHovered = hoveredListing === m.index;
+                            const isSelected = selectedListing === m.index;
+                            return (
+                              // @ts-ignore
+                              <Marker
+                                key={i}
+                                position={[m.coords!.lat, m.coords!.lng]}
+                                zIndexOffset={isSelected ? 1000 : isHovered ? 500 : 0}
+                                eventHandlers={{
+                                  mouseover: () => setHoveredListing(m.index ?? null),
+                                  mouseout: () => setHoveredListing(null),
+                                  click: () => {
+                                    setSelectedListing(m.index ?? null);
+                                    // Scroll to card
+                                    const cardElement = document.querySelector(`[data-listing-index="${m.index}"]`);
+                                    if (cardElement) {
+                                      cardElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    }
+                                  }
+                                }}
+                              >
+                                {/* @ts-ignore */}
+                                <Tooltip direction="top" offset={[0, -10]} opacity={1}>
+                                  <div style={{ fontSize: 12 }}>
+                                    <strong>{m.address}</strong>
+                                    <br />
+                                    {m.rent ? `$${m.rent}/mo` : ""} • Match: {m.match_score || 0}%
+                                    <br />
+                                    {m.reason || ""}
+                                  </div>
+                                </Tooltip>
+                              </Marker>
+                            );
+                          })}
+                        </MapContainer>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1210,16 +1389,25 @@ export default function ResultsPage() {
           background: rgba(255, 255, 255, 0.12);
           backdrop-filter: blur(8px);
           transition: all 0.2s ease;
-          min-height: 160px;
+          min-height: fit-content;
           display: flex;
           flex-direction: column;
+          word-break: break-word;
+          overflow-wrap: anywhere;
         }
 
-        .item-card:hover {
+        .item-card:hover,
+        .item-card.hovered {
           background: rgba(255, 255, 255, 0.18);
           border-color: rgba(147, 197, 253, 0.5);
           transform: translateY(-2px);
           box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .item-card.selected {
+          background: rgba(147, 197, 253, 0.15);
+          border-color: rgba(147, 197, 253, 0.8);
+          box-shadow: 0 0 20px rgba(147, 197, 253, 0.3);
         }
 
         .item-header {
@@ -1232,9 +1420,9 @@ export default function ResultsPage() {
         .item-title {
           font-family: "Geist", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
           font-weight: 600;
-          font-size: 18px;
+          font-size: 19px;
           color: rgb(255, 255, 255);
-          line-height: 1.4;
+          line-height: 1.5;
           text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
           flex: 1;
           margin-right: 1rem;
@@ -1242,21 +1430,21 @@ export default function ResultsPage() {
 
         .item-meta {
           font-family: "Geist", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
-          font-size: 15px;
+          font-size: 14px;
           font-weight: 500;
           color: rgb(200, 200, 200);
           text-align: right;
-          line-height: 1.4;
+          line-height: 1.5;
           flex-shrink: 0;
         }
 
         .item-description {
           font-family: "Geist", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
           color: rgb(180, 180, 180);
-          font-size: 15px;
+          font-size: 16px;
           margin-bottom: 1rem;
           line-height: 1.5;
-          flex: 1;
+          flex-grow: 1;
         }
 
         .matched-hobbies {
@@ -1360,7 +1548,8 @@ export default function ResultsPage() {
         }
 
         .map-container {
-          height: 100%;
+          height: 100dvh;
+          min-height: 560px;
           width: 100%;
           position: relative;
           overflow: hidden;

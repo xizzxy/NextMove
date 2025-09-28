@@ -36,21 +36,29 @@ class FinanceOutput(BaseModel):
     move_cash_needed: MoveCashNeeded
     tips: List[str]
 
+# Housing Agent Output Models
+class Coordinates(BaseModel):
+    lat: float
+    lng: float
+
 # Lifestyle Agent Output Models
 class NeighborhoodFit(BaseModel):
     name: str
     tags: List[str]
     match_score: int
 
+class Place(BaseModel):
+    name: str
+    category_tags: List[str]
+    coords: Coordinates
+    reason: str
+    match_score: int
+
 class LifestyleOutput(BaseModel):
     primary_fit: NeighborhoodFit
     alternatives: List[NeighborhoodFit]
     explanation: str
-
-# Housing Agent Output Models
-class Coordinates(BaseModel):
-    lat: float
-    lng: float
+    places: List[Place] = []
 
 class HousingRecommendation(BaseModel):
     address: str
@@ -72,6 +80,7 @@ class JobMatch(BaseModel):
     location: str
     salary_range: Optional[str] = None
     apply_url: Optional[str] = None
+    match_score: int = 0
 
 class JobRecommendations(BaseModel):
     job_matches: List[JobMatch]

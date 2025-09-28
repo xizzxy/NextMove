@@ -6,7 +6,8 @@
       "Bash(curl -s http://127.0.0.1:8000/health)",
       "Bash(python:*)",
       "Bash(npm run dev:*)",
-      "Bash(curl -X POST http://127.0.0.1:8000/api/plan_move -H \"Content-Type: application/json\" -d '{\"\"city\"\": \"\"Houston, TX\"\", \"\"budget\"\": 2000, \"\"credit_score\"\": 720, \"\"credit_band\"\": \"\"excellent\"\", \"\"interests\"\": [\"\"gym\"\", \"\"nightlife\"\"], \"\"salary\"\": 0, \"\"career_path\"\": \"\"Software Engineer\"\"}')"
+      "Bash(curl -X POST http://127.0.0.1:8000/api/plan_move -H \"Content-Type: application/json\" -d '{\"\"city\"\": \"\"Houston, TX\"\", \"\"budget\"\": 2000, \"\"credit_score\"\": 720, \"\"credit_band\"\": \"\"excellent\"\", \"\"interests\"\": [\"\"gym\"\", \"\"nightlife\"\"], \"\"salary\"\": 0, \"\"career_path\"\": \"\"Software Engineer\"\"}')",
+      "Bash(npx tsc:*)"
     ],
     "deny": [],
     "ask": []
