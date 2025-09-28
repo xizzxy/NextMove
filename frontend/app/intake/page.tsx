@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import {pages} from "next/dist/build/templates/app-page";
+import Link from "next/link";
 
 type Career =
   | "Software Engineer"
@@ -119,7 +121,7 @@ export default function IntakePage() {
   return (
     <main className="screen" role="main">
       {/* Brand */}
-      <div className="brand">NextMove</div>
+      <Link href="/"><div className="brand">NextMove</div></Link>
 
       {/* Background effects */}
       <div className="bg">
@@ -343,7 +345,7 @@ export default function IntakePage() {
           padding: 0;
           background: #000;
         }
-
+        
         .screen {
           min-height: 100vh;
           width: 100%;
@@ -647,15 +649,13 @@ export default function IntakePage() {
         /* Form grid: 1col mobile, 2col md */
         .form {
           display: grid;
-          gap: 24px; /* space-y-6 / gap-6 */
+          row-gap: 24px; /* space-y-6 / gap-6 */
+          column-gap: 128px;
           grid-template-columns: 1fr;
         }
         @media (min-width: 768px) {
           .form {
             grid-template-columns: 1fr 1fr; /* md:grid-cols-2 */
-          }
-          .field:nth-last-child(2) {
-            grid-column: 1 / -1; /* actions row spans both */
           }
         }
 
@@ -740,6 +740,17 @@ export default function IntakePage() {
             "Segoe UI Symbol", sans-serif;
           font-size: 16px;
           backdrop-filter: blur(6px);
+        }
+        
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+          /* display: none; <- Crashes Chrome on hover */
+          -webkit-appearance: none;
+          margin: 0; /* <-- Apparently some margin are still there even though it's hidden */
+        }
+
+        input[type=number] {
+          -moz-appearance:textfield; /* Firefox */
         }
         .status.error {
           background: rgba(239, 68, 68, 0.2); /* bg-red-500/20 */
