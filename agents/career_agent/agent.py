@@ -1,6 +1,7 @@
 # agents/career_agent/agent.py
 import os
 import json
+import re
 import requests
 from google import genai
 from google.genai.types import GenerateContentConfig, HttpOptions
@@ -93,7 +94,7 @@ class CareerAgent:
             - Career: {profile.career_path}
             - Experience: {profile.experience_years} years
             - Relocating to: {profile.city}
-            - Interests: {', '.join(profile.interests)}
+            - Hobbies: {', '.join([hobby.strip() for hobby in re.split(r'[^a-zA-Z0-9\s]+|\s+', profile.hobbies) if hobby.strip()])}
 
             The email should be:
             - Professional but personable
@@ -224,7 +225,7 @@ class CareerAgent:
 
         AVOID these companies already found: {', '.join(existing_companies)}
 
-        Focus on companies that would appeal to someone interested in: {', '.join(profile.interests)}
+        Focus on companies that would appeal to someone with hobbies: {', '.join([hobby.strip() for hobby in re.split(r'[^a-zA-Z0-9\s]+|\s+', profile.hobbies) if hobby.strip()])}
         Consider their lifestyle preferences: {profile.lifestyle}
 
         Respond with ONLY a JSON object:
@@ -298,13 +299,14 @@ class CareerAgent:
         elif "marketing" in career_lower:
             base_skills = ["digital marketing", "seo", "analytics", "campaigns"]
 
-        # Add interest-based skills
-        for interest in profile.interests:
-            if interest.lower() in ["tech", "technology"]:
+        # Add hobby-based skills
+        hobbies_list = [hobby.strip().lower() for hobby in re.split(r'[^a-zA-Z0-9\s]+|\s+', profile.hobbies) if hobby.strip()]
+        for hobby in hobbies_list:
+            if hobby in ["tech", "technology", "coding", "programming"]:
                 base_skills.append("innovation")
-            elif interest.lower() in ["health", "fitness", "gym"]:
+            elif hobby in ["health", "fitness", "gym", "yoga", "running"]:
                 base_skills.append("wellness")
-            elif interest.lower() in ["vegan", "sustainability"]:
+            elif hobby in ["vegan", "sustainability", "environment"]:
                 base_skills.append("sustainability")
 
         return base_skills[:4]  # Limit to most relevant

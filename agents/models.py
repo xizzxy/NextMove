@@ -10,7 +10,6 @@ class UserProfile(BaseModel):
     budget: int
     credit_band: Literal["excellent", "good", "fair", "poor"]
     credit_score: Optional[int] = None
-    interests: List[str] = []
     lifestyle: str = ""
     hobbies: str = ""
     career_path: str
@@ -43,7 +42,6 @@ class NeighborhoodFit(BaseModel):
 
 class LifestyleOutput(BaseModel):
     primary_fit: NeighborhoodFit
-    alternatives: List[NeighborhoodFit]
     explanation: str
 
 # Housing Agent Output Models
