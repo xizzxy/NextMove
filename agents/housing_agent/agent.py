@@ -131,13 +131,15 @@ class HousingAgent:
             reasons.append("close to credit requirements")
 
         # Lifestyle fit (25% of score)
-        user_interests_lower = [i.lower() for i in profile.interests]
+        import re
+        hobbies_list = [hobby.strip() for hobby in re.split(r'[^a-zA-Z0-9\s]+|\s+', profile.hobbies) if hobby.strip()]
+        user_hobbies_lower = [h.lower() for h in hobbies_list]
         amenity_keywords = [amenity.lower() for amenity in listing["amenities"]]
 
         lifestyle_matches = 0
-        for interest in user_interests_lower:
+        for hobby in user_hobbies_lower:
             for amenity in amenity_keywords:
-                if interest in amenity or any(word in amenity for word in interest.split()):
+                if hobby in amenity or any(word in amenity for word in hobby.split()):
                     lifestyle_matches += 1
                     break
 

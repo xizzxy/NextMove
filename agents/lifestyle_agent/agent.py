@@ -14,20 +14,20 @@ class LifestyleAgent:
 
     async def run(self, profile: UserProfile) -> LifestyleOutput:
         # Use Gemini to analyze neighborhoods based on user profile
+        hobbies_list = [hobby.strip() for hobby in re.split(r'[^a-zA-Z0-9\s]+|\s+', profile.hobbies) if hobby.strip()]
+
         prompt = f"""
         You are analyzing neighborhoods in {profile.city} for someone with these characteristics:
-        - Interests: {', '.join(profile.interests)}
         - Lifestyle: {profile.lifestyle}
-        - Hobbies: {profile.hobbies}
+        - Hobbies: {', '.join(hobbies_list)}
         - Career: {profile.career_path}
 
-        Research and recommend 4 real neighborhoods in {profile.city}. For each neighborhood, identify relevant tags/characteristics that match the user's profile.
+        Research and recommend the number one best fit neighborhood in {profile.city}. For each neighborhood, identify relevant tags/characteristics that match the user's profile.
 
         Respond with ONLY a JSON object in this exact format:
         {{
             "neighborhoods": [
                 {{"name": "Neighborhood Name", "tags": ["tag1", "tag2", "tag3"], "match_score": 85}},
-                {{"name": "Another Neighborhood", "tags": ["tag1", "tag2"], "match_score": 78}}
             ]
         }}
 
@@ -60,7 +60,8 @@ class LifestyleAgent:
                 ) for n in neighborhoods_data
             ]
 
-        except Exception:
+        except Exception as e:
+            print(f"Gemini API failed, using fallback: {e}")
             # Fallback to mock data if Gemini fails
             mock_neighborhoods = [
                 {"name": "Downtown", "tags": ["nightlife", "gym", "walkable"], "match_score": 85},
@@ -69,8 +70,11 @@ class LifestyleAgent:
                 {"name": "University Area", "tags": ["young-professionals", "affordable", "transit"], "match_score": 72}
             ]
 
-            # Score based on interest overlap for fallback
-            user_interests_lower = [i.lower() for i in profile.interests]
+            # Score based on hobby overlap for fallback
+            hobbies_list = [hobby.strip() for hobby in re.split(r'[^a-zA-Z0-9\s]+|\s+', profile.hobbies) if hobby.strip()]
+            user_hobbies_lower = [h.lower() for h in hobbies_list]
+            user_lifestyle_lower = profile.lifestyle.lower() if profile.lifestyle else ""
+
             for neighborhood in mock_neighborhoods:
                 overlap = len(set(neighborhood["tags"]).intersection(user_interests_lower))
                 neighborhood["match_score"] = min(100, 50 + overlap * 15)
@@ -85,10 +89,8 @@ class LifestyleAgent:
             ]
 
         primary_fit = neighborhoods[0] if neighborhoods else NeighborhoodFit(name="Downtown", tags=["walkable"], match_score=50)
-        alternatives = neighborhoods[1:4] if len(neighborhoods) > 1 else []
 
         return LifestyleOutput(
             primary_fit=primary_fit,
-            alternatives=alternatives,
-            explanation=f"Ranked neighborhoods by overlap between your interests ({', '.join(profile.interests)}) and neighborhood characteristics."
+            explanation=f"Ranked neighborhoods by overlap between your hobbies ({', '.join(hobbies_list)}) and neighborhood characteristics."
         )
