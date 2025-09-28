@@ -420,7 +420,7 @@ export default function HomePage() {
           gap: 8px;
           padding: 8px 16px; /* 16px horiz, 8px vert */
           background: rgba(255, 255, 255, 0.9); /* base 90% */
-          color: rgb(136, 136, 136);
+          color: #252525;
           font-family: Geist, Arial, "Apple Color Emoji", "Segoe UI Emoji",
             "Segoe UI Symbol", sans-serif;
           font-size: 14px;
