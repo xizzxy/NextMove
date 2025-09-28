@@ -1,6 +1,7 @@
 # agents/lifestyle_agent/agent.py
 import os
 import json
+import re
 from google import genai
 from google.genai.types import GenerateContentConfig, HttpOptions
 from ..models import UserProfile, LifestyleOutput, NeighborhoodFit
@@ -76,8 +77,24 @@ class LifestyleAgent:
             user_lifestyle_lower = profile.lifestyle.lower() if profile.lifestyle else ""
 
             for neighborhood in mock_neighborhoods:
-                overlap = len(set(neighborhood["tags"]).intersection(user_interests_lower))
-                neighborhood["match_score"] = min(100, 50 + overlap * 15)
+                # Calculate match score based on exact hobby-tag matches
+                hobby_matches = 0
+                neighborhood_tags_lower = [tag.lower() for tag in neighborhood["tags"]]
+
+                # Count exact matches between user hobbies and neighborhood tags
+                for hobby in user_hobbies_lower:
+                    if hobby in neighborhood_tags_lower:
+                        hobby_matches += 1
+
+                # Mathematical equation: (matches / total_hobbies) * 100
+                # If no hobbies provided, use base score of 30
+                if user_hobbies_lower:
+                    match_percentage = hobby_matches / len(user_hobbies_lower)
+                    score = int(match_percentage * 100)
+                else:
+                    score = 30
+
+                neighborhood["match_score"] = score
 
             mock_neighborhoods.sort(key=lambda x: x["match_score"], reverse=True)
             neighborhoods = [
