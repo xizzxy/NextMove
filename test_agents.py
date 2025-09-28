@@ -3,6 +3,10 @@ import asyncio
 import sys
 import os
 from unittest.mock import patch, MagicMock
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Add the current directory to Python path so we can import agents
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -23,9 +27,8 @@ async def test_agents():
         budget=1800,
         credit_band="good",
         credit_score=720,
-        interests=["vegan", "gym", "nightlife"],
         lifestyle="vegan, active",
-        hobbies="climbing, painting",
+        hobbies="climbing, painting, vegan cooking, gym workouts, nightlife",
         career_path="Software Engineer",
         experience_years=2,
         salary=72000
@@ -50,7 +53,7 @@ async def test_agents():
         lifestyle_results = await lifestyle_agent.run(sample_profile)
         print(f"Lifestyle: Best neighborhood: {lifestyle_results.primary_fit.name}")
         print(f"  Match score: {lifestyle_results.primary_fit.match_score}")
-        print(f"  Alternatives: {[n.name for n in lifestyle_results.alternatives]}")
+        print(f"  Tags: {lifestyle_results.primary_fit.tags}")
 
         # Test HousingAgent
         print("\nTesting HousingAgent...")
