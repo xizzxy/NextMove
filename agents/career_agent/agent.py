@@ -4,7 +4,7 @@ import json
 import requests
 from google import genai
 from google.genai.types import GenerateContentConfig, HttpOptions
-from ..models import UserProfile, CareerOutput, JobRecommendations, JobMatch, RecruiterTarget, EmailDraft
+from ..models import UserProfile, CareerOutput, JobRecommendations, JobMatch
 class CareerAgent:
     def __init__(self):
         self.client = genai.Client(
@@ -28,25 +28,14 @@ class CareerAgent:
             JobMatch(
                 title=job["title"],
                 company=job["company"],
-                skills=job["skills"],
                 location=job["location"],
-                salary_range=job.get("salary_range")
+                salary_range=job.get("salary_range"),
+                apply_url=job.get("apply_url")
             ) for job in jobs_data[:5]  # Limit to 5 jobs
         ]
 
-        # Create recruiter targets (top 3 companies)
-        recruiter_targets = [
-            RecruiterTarget(company=job.company, role=job.title)
-            for job in job_matches[:3]
-        ]
-
-        # Generate email drafts using Gemini
-        email_drafts = await self._generate_email_drafts(recruiter_targets, profile)
-
         job_recommendations = JobRecommendations(
-            job_matches=job_matches,
-            recruiter_targets=recruiter_targets,
-            email_drafts=email_drafts
+            job_matches=job_matches
         )
 
         return CareerOutput(job_recommendations=job_recommendations)
@@ -54,15 +43,15 @@ class CareerAgent:
     def _generate_fallback_jobs(self, profile: UserProfile) -> list:
         """Generate fallback job data if Gemini fails"""
         base_jobs = [
-            {"title": "Software Engineer", "company": "TechFlow", "skills": ["python", "javascript", "sql"]},
-            {"title": "Frontend Developer", "company": "WebCraft", "skills": ["react", "typescript", "css"]},
-            {"title": "Data Analyst", "company": "DataInsights", "skills": ["python", "sql", "excel"]},
-            {"title": "Full Stack Developer", "company": "AppBuilder", "skills": ["node", "react", "mongodb"]},
-            {"title": "DevOps Engineer", "company": "CloudTech", "skills": ["aws", "docker", "kubernetes"]},
+            {"title": "Software Engineer", "company": "TechFlow"},
+            {"title": "Frontend Developer", "company": "WebCraft"},
+            {"title": "Data Analyst", "company": "DataInsights"},
+            {"title": "Full Stack Developer", "company": "AppBuilder"},
+            {"title": "DevOps Engineer", "company": "CloudTech"},
         ]
 
         # Adjust titles based on experience
-        if profile.experience_years < 2:
+        if profile.experience_years and profile.experience_years < 2:
             for job in base_jobs:
                 if "Engineer" in job["title"]:
                     job["title"] = job["title"].replace("Engineer", "Intern")
@@ -72,67 +61,15 @@ class CareerAgent:
         # Add location and salary range
         for job in base_jobs:
             job["location"] = profile.city
-            if profile.experience_years < 2:
+            experience_years = profile.experience_years or 0
+            if experience_years < 2:
                 job["salary_range"] = "$45,000 - $65,000"
-            elif profile.experience_years < 5:
+            elif experience_years < 5:
                 job["salary_range"] = "$65,000 - $85,000"
             else:
                 job["salary_range"] = "$85,000 - $120,000"
 
         return base_jobs
-
-    async def _generate_email_drafts(self, recruiter_targets: list[RecruiterTarget], profile: UserProfile) -> list[EmailDraft]:
-        """Generate personalized email drafts using Gemini"""
-        email_drafts = []
-
-        for target in recruiter_targets:
-            prompt = f"""
-            Write a professional, concise email to a recruiter for the {target.role} position at {target.company}.
-
-            Candidate profile:
-            - Career: {profile.career_path}
-            - Experience: {profile.experience_years} years
-            - Relocating to: {profile.city}
-            - Interests: {', '.join(profile.interests)}
-
-            The email should be:
-            - Professional but personable
-            - 3-4 sentences maximum
-            - Express genuine interest in the company
-            - Mention relocation plans
-            - Request a brief conversation
-
-            Respond with ONLY the email body text, no subject line or greeting.
-            """
-
-            try:
-                response = self.client.models.generate_content(
-                    model="gemini-1.5-pro",
-                    contents=prompt,
-                    config=GenerateContentConfig(
-                        temperature=0.7,
-                        max_output_tokens=300
-                    )
-                )
-                email_body = response.text.strip()
-            except Exception:
-                # Fallback email template
-                email_body = (
-                    f"I'm a {profile.career_path} with {profile.experience_years} years of experience, "
-                    f"and I'm planning to relocate to {profile.city}. "
-                    f"I'm very interested in the {target.role} opportunity at {target.company} "
-                    f"and would love to discuss how my background might be a fit. "
-                    f"Would you be available for a brief conversation about this role?"
-                )
-
-            email_draft = EmailDraft(
-                to=f"recruiter@{target.company.lower().replace(' ', '')}.com",
-                subject=f"Interest in {target.role} role – relocating to {profile.city}",
-                body=f"Hi {{recruiter_name}},\n\n{email_body}\n\nBest regards,\n{profile.name}"
-            )
-            email_drafts.append(email_draft)
-
-        return email_drafts
 
     async def _search_linkedin_jobs(self, profile: UserProfile) -> list:
         """Search for real jobs using Harvest LinkedIn API based on user profile"""
@@ -142,8 +79,7 @@ class CareerAgent:
         headers = {"X-API-Key": self.linkedin_api_key}
 
         # Construct personalized search parameters
-        skill_keywords = self._generate_skill_keywords(profile)
-        search_query = f"{profile.career_path} {' '.join(skill_keywords)}"
+        search_query = profile.career_path
 
         try:
             # First, search for relevant companies in the user's city and industry
@@ -233,10 +169,9 @@ class CareerAgent:
                 {{
                     "title": "Specific Role Title",
                     "company": "Company Name",
-                    "skills": ["skill1", "skill2", "skill3"],
                     "location": "{profile.city}",
                     "salary_range": "$X,000 - $Y,000",
-                    "description": "Brief job description highlighting why it fits their interests"
+                    "apply_url": "https://company.com/careers/job-id"
                 }}
             ]
         }}
@@ -284,30 +219,6 @@ class CareerAgent:
         else:
             return ["technology", "business"]
 
-    def _generate_skill_keywords(self, profile: UserProfile) -> list:
-        """Generate personalized skill keywords based on profile"""
-        base_skills = []
-
-        career_lower = profile.career_path.lower()
-        if "software" in career_lower or "developer" in career_lower:
-            base_skills = ["python", "javascript", "react", "api"]
-        elif "data" in career_lower:
-            base_skills = ["sql", "python", "analytics", "machine learning"]
-        elif "product" in career_lower:
-            base_skills = ["agile", "roadmap", "strategy", "analytics"]
-        elif "marketing" in career_lower:
-            base_skills = ["digital marketing", "seo", "analytics", "campaigns"]
-
-        # Add interest-based skills
-        for interest in profile.interests:
-            if interest.lower() in ["tech", "technology"]:
-                base_skills.append("innovation")
-            elif interest.lower() in ["health", "fitness", "gym"]:
-                base_skills.append("wellness")
-            elif interest.lower() in ["vegan", "sustainability"]:
-                base_skills.append("sustainability")
-
-        return base_skills[:4]  # Limit to most relevant
 
     def _extract_jobs_from_companies(self, companies_data: dict, profile: UserProfile) -> list:
         """Extract job opportunities from company search results"""
@@ -325,10 +236,8 @@ class CareerAgent:
                 job = {
                     "title": title,
                     "company": company_name,
-                    "skills": self._generate_skill_keywords(profile),
                     "location": profile.city,
-                    "salary_range": self._estimate_salary_range(profile, title),
-                    "description": f"{title} role at {company_name} in {company_industry} industry"
+                    "salary_range": self._estimate_salary_range(profile, title)
                 }
                 jobs.append(job)
 
@@ -365,10 +274,9 @@ class CareerAgent:
             job = {
                 "title": job_listing.get("title", ""),
                 "company": job_listing.get("company", {}).get("name", ""),
-                "skills": self._extract_skills_from_description(job_listing.get("description", "")),
                 "location": job_listing.get("location", profile.city),
                 "salary_range": self._extract_salary_from_job(job_listing, profile),
-                "description": job_listing.get("description", "")[:100] + "..."
+                "apply_url": job_listing.get("apply_url")
             }
             jobs.append(job)
 
@@ -399,10 +307,9 @@ class CareerAgent:
             job = {
                 "title": job_details.get("title", ""),
                 "company": company_info.get("companyName", ""),
-                "skills": self._extract_skills_from_description(job_details.get("description", "")),
                 "location": job_details.get("formattedLocation", profile.city),
                 "salary_range": salary_range,
-                "description": job_details.get("description", "")[:100] + "..."
+                "apply_url": job_details.get("apply_url")
             }
             jobs.append(job)
 
@@ -433,16 +340,3 @@ class CareerAgent:
             max_sal = int(max_sal * 1.4)
 
         return f"${min_sal:,} - ${max_sal:,}"
-
-    def _extract_skills_from_description(self, description: str) -> list:
-        """Extract relevant skills from job description"""
-        common_skills = [
-            "python", "javascript", "react", "node", "sql", "aws", "docker",
-            "kubernetes", "git", "api", "rest", "graphql", "mongodb", "postgres",
-            "machine learning", "data analysis", "agile", "scrum", "typescript"
-        ]
-
-        description_lower = description.lower()
-        found_skills = [skill for skill in common_skills if skill in description_lower]
-
-        return found_skills[:4]  # Return top 4 relevant skills

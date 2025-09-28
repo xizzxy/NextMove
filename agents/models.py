@@ -5,17 +5,18 @@ from pydantic import BaseModel, Field
 
 # Input Models
 class UserProfile(BaseModel):
-    name: str
+    name: str = ""
     city: str
     budget: int
-    credit_band: Literal["excellent", "good", "fair", "poor"]
+    credit_band: Optional[Literal["excellent", "good", "fair", "poor"]] = None
     credit_score: Optional[int] = None
     interests: List[str] = []
     lifestyle: str = ""
     hobbies: str = ""
     career_path: str
-    experience_years: int
-    salary: int
+    experience_years: Optional[int] = None
+    salary: int = 0
+    fast_mode: bool = False
 
 # Finance Agent Output Models
 class AffordabilityInfo(BaseModel):
@@ -53,12 +54,13 @@ class Coordinates(BaseModel):
 
 class HousingRecommendation(BaseModel):
     address: str
-    rent: int
-    min_credit_score: int
+    rent: Optional[int]
+    min_credit_score: Optional[int]
     amenities: List[str]
     coords: Coordinates
     match_score: int
     reason: str
+    source_url: Optional[str] = None
 
 class HousingOutput(BaseModel):
     housing_recommendations: List[HousingRecommendation]
@@ -67,23 +69,12 @@ class HousingOutput(BaseModel):
 class JobMatch(BaseModel):
     title: str
     company: str
-    skills: List[str]
     location: str
     salary_range: Optional[str] = None
-
-class RecruiterTarget(BaseModel):
-    company: str
-    role: str
-
-class EmailDraft(BaseModel):
-    to: str
-    subject: str
-    body: str
+    apply_url: Optional[str] = None
 
 class JobRecommendations(BaseModel):
     job_matches: List[JobMatch]
-    recruiter_targets: List[RecruiterTarget]
-    email_drafts: List[EmailDraft]
 
 class CareerOutput(BaseModel):
     job_recommendations: JobRecommendations

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 
 type Career =
   | "Software Engineer"
@@ -32,6 +32,10 @@ function scoreToBand(score: number): "excellent" | "good" | "fair" | "poor" {
   return "poor";
 }
 
+function joinUrl(base: string, path: string): string {
+  return `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
+}
+
 export default function IntakePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -47,6 +51,32 @@ export default function IntakePage() {
   const [credit, setCredit] = useState<string>(""); // 3 digits
 
   const backend = process.env.NEXT_PUBLIC_BACKEND_URL;
+  if (!backend) {
+    throw new Error("NEXT_PUBLIC_BACKEND_URL is not set");
+  }
+
+  // Prefill form from sessionStorage if returning from results
+  useEffect(() => {
+    const savedData = sessionStorage.getItem("nextmove_result");
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData);
+        const profile = parsed.profile;
+        if (profile) {
+          if (profile.name) setName(profile.name);
+          if (profile.location) setLocation(profile.location);
+          if (profile.lifestyle) setLifestyle(profile.lifestyle);
+          if (profile.hobbies) setHobbies(profile.hobbies);
+          if (profile.career) setCareer(profile.career);
+          if (profile.experience !== "" && profile.experience !== undefined) setExperience(profile.experience);
+          if (profile.budget !== "" && profile.budget !== undefined) setBudget(profile.budget);
+          if (profile.credit) setCredit(profile.credit);
+        }
+      } catch {
+        // Ignore parsing errors
+      }
+    }
+  }, []);
 
   const valid = useMemo(() => {
     const creditOk = /^\d{3}$/.test(String(credit || ""));
@@ -64,57 +94,92 @@ export default function IntakePage() {
       return;
     }
 
+    const creditNum = Number(credit);
+    const band = scoreToBand(creditNum);
+
+    const interests = [...lifestyle.split(","), ...hobbies.split(",")]
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const profile = {
+      name,
+      location,
+      lifestyle,
+      hobbies,
+      career,
+      experience,
+      budget,
+      credit,
+    };
+
+    // Save profile data immediately and navigate to show loading state
+    sessionStorage.setItem(
+      "nextmove_result",
+      JSON.stringify({
+        profile,
+        data: null, // Will be filled by results page
+        loading: true
+      })
+    );
+
+    // Navigate immediately to show loading state
+    router.push("/results");
+
+    // Continue with fetch in background
     setLoading(true);
+
+    const controller = new AbortController();
+
     try {
-      const creditNum = Number(credit);
-      const band = scoreToBand(creditNum);
-
-      const interests = [...lifestyle.split(","), ...hobbies.split(",")]
-        .map((s) => s.trim())
-        .filter(Boolean);
-
       const body = {
         city: location.trim(),
         budget: Number(budget),
+        credit_score: creditNum,
         credit_band: band,
         interests,
         salary: 0,
         career_path: career,
+        ...(experience !== "" && { experience_years: Number(experience) })
       };
 
-      const res = await fetch(`${backend}/api/plan_move`, {
+      const url = joinUrl(backend!, "/api/plan_move");
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
+        signal: controller.signal,
       });
 
-      if (!res.ok) throw new Error(`Backend ${res.status}`);
+      if (!res.ok) throw new Error(`Backend returned ${res.status}`);
       const data = await res.json();
 
+      // Update sessionStorage with actual results
       sessionStorage.setItem(
         "nextmove_result",
         JSON.stringify({
-          profile: {
-            name,
-            location,
-            lifestyle,
-            hobbies,
-            career,
-            experience,
-            budget,
-            credit,
-          },
+          profile,
           data,
+          loading: false
         })
       );
 
-      router.push("/results");
+      // No need to reload - results page will automatically detect the data change
+
     } catch (e: any) {
-      setErr(e.message || "Something went wrong.");
-    } finally {
-      setLoading(false);
+      // Handle errors
+        sessionStorage.setItem(
+          "nextmove_result",
+          JSON.stringify({
+            profile,
+            data: null,
+            loading: false,
+            error: e.message || "Something went wrong"
+          })
+        );
+      }
+
+      // No need to reload - results page will automatically detect the error state
     }
-  }
 
   return (
     <main className="screen" role="main">
@@ -339,7 +404,7 @@ export default function IntakePage() {
 
       <style jsx>{`
         :global(html, body) {
-          margin: px;
+          margin: 9px;
           padding: 0;
           background: #000;
         }
@@ -662,6 +727,7 @@ export default function IntakePage() {
         .field {
           display: flex;
           flex-direction: column;
+          gap: 8px;
         }
 
         .label {
@@ -670,8 +736,7 @@ export default function IntakePage() {
           font-weight: 400;
           font-size: 14px;
           color: rgb(237, 237, 237);
-          margin-bottom: 8px; /* mb-2 */
-          text-shadow: 0 6px 16px rgba(0, 0, 0, 0.35); /* drop-shadow-lg */
+          text-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
         }
 
         .req {
@@ -680,20 +745,23 @@ export default function IntakePage() {
 
         .input {
           width: 100%;
+          height: 48px;
           font-family: "Geist", Arial, "Apple Color Emoji", "Segoe UI Emoji",
             "Segoe UI Symbol", sans-serif;
           font-weight: 400;
-          font-size: 14px;
+          font-size: 15px;
           color: rgb(237, 237, 237);
-          padding: 12px 16px; /* py-3 px-4 */
+          padding: 0 16px;
           border-radius: 10px;
           border: 1px solid rgba(255, 255, 255, 0.18);
-          background: rgba(255, 255, 255, 0.1); /* bg-white/10 */
+          background: rgba(255, 255, 255, 0.1);
           backdrop-filter: blur(6px);
           outline: none;
-          box-shadow: 0 10px 15px rgba(0, 0, 0, 0.35); /* shadow-lg */
+          box-shadow: 0 10px 15px rgba(0, 0, 0, 0.35);
           transition: background 200ms ease, border-color 200ms ease,
             box-shadow 200ms ease, transform 150ms ease;
+          display: flex;
+          align-items: center;
         }
         .input:hover {
           background: rgba(255, 255, 255, 0.15); /* bg-white/15 */
@@ -717,18 +785,18 @@ export default function IntakePage() {
               rgba(237, 237, 237, 0.7) 50%,
               transparent 50%
             );
-          background-position: calc(100% - 18px) calc(1em + 2px),
-            calc(100% - 13px) calc(1em + 2px);
+          background-position: calc(100% - 18px) center,
+            calc(100% - 13px) center;
           background-size: 5px 5px, 5px 5px;
           background-repeat: no-repeat;
+          padding-right: 40px;
         }
 
         .helper {
           display: block;
-          margin-top: 6px;
           font-family: "Geist", Arial, "Apple Color Emoji", "Segoe UI Emoji",
             "Segoe UI Symbol", sans-serif;
-          font-size: 12px; /* small helper text */
+          font-size: 12px;
           color: rgb(136, 136, 136);
         }
 
@@ -756,7 +824,7 @@ export default function IntakePage() {
         }
 
         .submit {
-          padding: 16px 32px; /* py-4 px-8 */
+          padding: 16px 32px;
           border-radius: 10px;
           border: none;
           cursor: pointer;
@@ -765,11 +833,15 @@ export default function IntakePage() {
           font-size: 16px;
           font-weight: 400;
           color: rgb(136, 136, 136);
-          background: rgba(255, 255, 255, 0.9); /* bg-white/90 */
-          box-shadow: 0 25px 50px rgba(255, 255, 255, 0.2); /* shadow-2xl white/20 */
+          background: rgba(255, 255, 255, 0.9);
+          box-shadow: 0 25px 50px rgba(255, 255, 255, 0.2);
           backdrop-filter: blur(4px);
           transform-origin: center;
           transition: all 300ms;
+          height: 56px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
         .submit:hover {
           transform: scale(1.05) translateY(-1px); /* hover:-translate-y-1 */
@@ -782,8 +854,8 @@ export default function IntakePage() {
         }
 
         .reset {
-          padding: 10px 16px;
-          border-radius: 8px;
+          padding: 12px 20px;
+          border-radius: 10px;
           border: 1px solid rgba(255, 255, 255, 0.2);
           background: rgba(255, 255, 255, 0.1);
           color: rgb(237, 237, 237);
@@ -791,8 +863,13 @@ export default function IntakePage() {
             "Segoe UI Symbol", sans-serif;
           font-size: 14px;
           font-weight: 400;
+          cursor: pointer;
           transition: background 200ms ease, border-color 200ms ease,
             transform 150ms ease;
+          height: 48px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
         .reset:hover {
           background: rgba(255, 255, 255, 0.15);
@@ -809,3 +886,4 @@ export default function IntakePage() {
     </main>
   );
 }
+

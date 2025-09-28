@@ -13,7 +13,14 @@ class FinanceAgent:
 
     async def run(self, profile: UserProfile) -> FinanceOutput:
         # Calculate recommended max rent (30% rule)
-        recommended_max_rent = int(profile.salary * 0.30 / 12)
+        # If salary is 0 or not provided, estimate from budget (reverse 30% rule)
+        if profile.salary and profile.salary > 0:
+            recommended_max_rent = int(profile.salary * 0.30 / 12)
+        else:
+            # Estimate annual salary from monthly budget (budget should be ~30% of monthly income)
+            estimated_monthly_income = profile.budget / 0.30
+            estimated_annual_salary = estimated_monthly_income * 12
+            recommended_max_rent = int(estimated_annual_salary * 0.30 / 12)
 
         # Determine budget vs recommended comparison
         if profile.budget < recommended_max_rent * 0.9:
@@ -31,10 +38,11 @@ class FinanceAgent:
         total = deposits + moving + setup + buffer
 
         # Use Gemini to generate personalized financial tips
+        display_salary = profile.salary if profile.salary > 0 else int(estimated_annual_salary) if 'estimated_annual_salary' in locals() else "not provided"
         prompt = f"""
         Generate 2-3 concise financial tips for someone moving to {profile.city} with:
         - Budget: ${profile.budget}/month
-        - Salary: ${profile.salary}/year
+        - Salary: ${display_salary}/year
         - Credit: {profile.credit_band}
 
         Focus on practical move-in cost strategies and budgeting advice.
