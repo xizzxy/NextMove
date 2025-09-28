@@ -1,7 +1,6 @@
 # agents/housing_agent/agent.py
 import os
 import json
-import re
 from typing import Dict, Any
 from google import genai
 from google.genai.types import GenerateContentConfig, HttpOptions
@@ -18,21 +17,21 @@ class HousingAgent:
         # Extract relevant data for scoring
         max_budget = profile.budget
         credit_score = self._get_credit_score_estimate(profile.credit_band)
-        preferred_neighborhoods = [lifestyle_results.primary_fit.name]
-        hobbies_list = [hobby.strip() for hobby in re.split(r'[^a-zA-Z0-9\s]+|\s+', profile.hobbies) if hobby.strip()]
+        preferred_neighborhoods = [lifestyle_results.primary_fit.name] + [n.name for n in lifestyle_results.alternatives]
+        user_interests = profile.interests
 
         # Use Gemini to generate realistic apartment listings
         prompt = f"""
         Generate 4-6 realistic apartment listings for {profile.city} with this criteria:
         - Budget range: ${max_budget-300} to ${max_budget+500}/month
         - Target neighborhoods: {', '.join(preferred_neighborhoods)}
-        - User hobbies: {', '.join(hobbies_list)}
+        - User interests: {', '.join(user_interests)}
 
         For each listing, include:
         - Realistic address in {profile.city}
         - Rent amount
         - Minimum credit score requirement (range 600-750)
-        - 2-4 relevant amenities that might appeal to someone with hobbies: {', '.join(hobbies_list)}
+        - 2-4 relevant amenities that might appeal to someone interested in: {', '.join(user_interests)}
         - Realistic lat/lng coordinates for {profile.city}
 
         Respond with ONLY a JSON object in this exact format:
@@ -132,15 +131,13 @@ class HousingAgent:
             reasons.append("close to credit requirements")
 
         # Lifestyle fit (25% of score)
-        import re
-        hobbies_list = [hobby.strip() for hobby in re.split(r'[^a-zA-Z0-9\s]+|\s+', profile.hobbies) if hobby.strip()]
-        user_hobbies_lower = [h.lower() for h in hobbies_list]
+        user_interests_lower = [i.lower() for i in profile.interests]
         amenity_keywords = [amenity.lower() for amenity in listing["amenities"]]
 
         lifestyle_matches = 0
-        for hobby in user_hobbies_lower:
+        for interest in user_interests_lower:
             for amenity in amenity_keywords:
-                if hobby in amenity or any(word in amenity for word in hobby.split()):
+                if interest in amenity or any(word in amenity for word in interest.split()):
                     lifestyle_matches += 1
                     break
 

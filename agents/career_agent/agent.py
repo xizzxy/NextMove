@@ -1,11 +1,10 @@
 # agents/career_agent/agent.py
 import os
 import json
-import re
 import requests
 from google import genai
 from google.genai.types import GenerateContentConfig, HttpOptions
-from ..models import UserProfile, CareerOutput, JobRecommendations, JobMatch, RecruiterTarget, EmailDraft
+from ..models import UserProfile, CareerOutput, JobRecommendations, JobMatch
 class CareerAgent:
     def __init__(self):
         self.client = genai.Client(
@@ -24,30 +23,36 @@ class CareerAgent:
             gemini_jobs = await self._enhance_with_gemini(profile, jobs_data)
             jobs_data.extend(gemini_jobs)
 
-        # Convert to JobMatch objects
-        job_matches = [
-            JobMatch(
+        # Ensure we have exactly 15 jobs
+        while len(jobs_data) < 15:
+            fallback_jobs = self._generate_fallback_jobs(profile)
+            for job in fallback_jobs:
+                if len(jobs_data) < 15:
+                    # Add some variation to avoid duplicates
+                    job["title"] = f"{job['title']} #{len(jobs_data) + 1}"
+                    jobs_data.append(job)
+                else:
+                    break
+
+        # Ensure salary diversity and calculate match scores
+        jobs_data = self._ensure_salary_diversity(jobs_data, profile)
+
+        # Convert to JobMatch objects with match scores
+        job_matches = []
+        for job in jobs_data[:15]:  # Exactly 15 jobs
+            match_score = self._calculate_job_match_score(job, profile)
+            job_match = JobMatch(
                 title=job["title"],
                 company=job["company"],
-                skills=job["skills"],
                 location=job["location"],
-                salary_range=job.get("salary_range")
-            ) for job in jobs_data[:5]  # Limit to 5 jobs
-        ]
-
-        # Create recruiter targets (top 3 companies)
-        recruiter_targets = [
-            RecruiterTarget(company=job.company, role=job.title)
-            for job in job_matches[:3]
-        ]
-
-        # Generate email drafts using Gemini
-        email_drafts = await self._generate_email_drafts(recruiter_targets, profile)
+                salary_range=job.get("salary_range"),
+                apply_url=job.get("apply_url"),
+                match_score=match_score
+            )
+            job_matches.append(job_match)
 
         job_recommendations = JobRecommendations(
-            job_matches=job_matches,
-            recruiter_targets=recruiter_targets,
-            email_drafts=email_drafts
+            job_matches=job_matches
         )
 
         return CareerOutput(job_recommendations=job_recommendations)
@@ -55,15 +60,25 @@ class CareerAgent:
     def _generate_fallback_jobs(self, profile: UserProfile) -> list:
         """Generate fallback job data if Gemini fails"""
         base_jobs = [
-            {"title": "Software Engineer", "company": "TechFlow", "skills": ["python", "javascript", "sql"]},
-            {"title": "Frontend Developer", "company": "WebCraft", "skills": ["react", "typescript", "css"]},
-            {"title": "Data Analyst", "company": "DataInsights", "skills": ["python", "sql", "excel"]},
-            {"title": "Full Stack Developer", "company": "AppBuilder", "skills": ["node", "react", "mongodb"]},
-            {"title": "DevOps Engineer", "company": "CloudTech", "skills": ["aws", "docker", "kubernetes"]},
+            {"title": "Software Engineer", "company": "TechFlow"},
+            {"title": "Frontend Developer", "company": "WebCraft"},
+            {"title": "Data Analyst", "company": "DataInsights"},
+            {"title": "Full Stack Developer", "company": "AppBuilder"},
+            {"title": "DevOps Engineer", "company": "CloudTech"},
+            {"title": "Backend Developer", "company": "ServerTech"},
+            {"title": "Product Manager", "company": "InnovateCorp"},
+            {"title": "UX Designer", "company": "DesignStudio"},
+            {"title": "Data Scientist", "company": "AnalyticsPro"},
+            {"title": "QA Engineer", "company": "QualityFirst"},
+            {"title": "Machine Learning Engineer", "company": "AITech"},
+            {"title": "System Administrator", "company": "NetworkSol"},
+            {"title": "Mobile Developer", "company": "AppMakers"},
+            {"title": "Security Engineer", "company": "CyberGuard"},
+            {"title": "Database Administrator", "company": "DataCore"},
         ]
 
         # Adjust titles based on experience
-        if profile.experience_years < 2:
+        if profile.experience_years and profile.experience_years < 2:
             for job in base_jobs:
                 if "Engineer" in job["title"]:
                     job["title"] = job["title"].replace("Engineer", "Intern")
@@ -73,67 +88,15 @@ class CareerAgent:
         # Add location and salary range
         for job in base_jobs:
             job["location"] = profile.city
-            if profile.experience_years < 2:
+            experience_years = profile.experience_years or 0
+            if experience_years < 2:
                 job["salary_range"] = "$45,000 - $65,000"
-            elif profile.experience_years < 5:
+            elif experience_years < 5:
                 job["salary_range"] = "$65,000 - $85,000"
             else:
                 job["salary_range"] = "$85,000 - $120,000"
 
         return base_jobs
-
-    async def _generate_email_drafts(self, recruiter_targets: list[RecruiterTarget], profile: UserProfile) -> list[EmailDraft]:
-        """Generate personalized email drafts using Gemini"""
-        email_drafts = []
-
-        for target in recruiter_targets:
-            prompt = f"""
-            Write a professional, concise email to a recruiter for the {target.role} position at {target.company}.
-
-            Candidate profile:
-            - Career: {profile.career_path}
-            - Experience: {profile.experience_years} years
-            - Relocating to: {profile.city}
-            - Hobbies: {', '.join([hobby.strip() for hobby in re.split(r'[^a-zA-Z0-9\s]+|\s+', profile.hobbies) if hobby.strip()])}
-
-            The email should be:
-            - Professional but personable
-            - 3-4 sentences maximum
-            - Express genuine interest in the company
-            - Mention relocation plans
-            - Request a brief conversation
-
-            Respond with ONLY the email body text, no subject line or greeting.
-            """
-
-            try:
-                response = self.client.models.generate_content(
-                    model="gemini-1.5-pro",
-                    contents=prompt,
-                    config=GenerateContentConfig(
-                        temperature=0.7,
-                        max_output_tokens=300
-                    )
-                )
-                email_body = response.text.strip()
-            except Exception:
-                # Fallback email template
-                email_body = (
-                    f"I'm a {profile.career_path} with {profile.experience_years} years of experience, "
-                    f"and I'm planning to relocate to {profile.city}. "
-                    f"I'm very interested in the {target.role} opportunity at {target.company} "
-                    f"and would love to discuss how my background might be a fit. "
-                    f"Would you be available for a brief conversation about this role?"
-                )
-
-            email_draft = EmailDraft(
-                to=f"recruiter@{target.company.lower().replace(' ', '')}.com",
-                subject=f"Interest in {target.role} role – relocating to {profile.city}",
-                body=f"Hi {{recruiter_name}},\n\n{email_body}\n\nBest regards,\n{profile.name}"
-            )
-            email_drafts.append(email_draft)
-
-        return email_drafts
 
     async def _search_linkedin_jobs(self, profile: UserProfile) -> list:
         """Search for real jobs using Harvest LinkedIn API based on user profile"""
@@ -143,8 +106,7 @@ class CareerAgent:
         headers = {"X-API-Key": self.linkedin_api_key}
 
         # Construct personalized search parameters
-        skill_keywords = self._generate_skill_keywords(profile)
-        search_query = f"{profile.career_path} {' '.join(skill_keywords)}"
+        search_query = profile.career_path
 
         try:
             # First, search for relevant companies in the user's city and industry
@@ -225,7 +187,7 @@ class CareerAgent:
 
         AVOID these companies already found: {', '.join(existing_companies)}
 
-        Focus on companies that would appeal to someone with hobbies: {', '.join([hobby.strip() for hobby in re.split(r'[^a-zA-Z0-9\s]+|\s+', profile.hobbies) if hobby.strip()])}
+        Focus on companies that would appeal to someone interested in: {', '.join(profile.interests)}
         Consider their lifestyle preferences: {profile.lifestyle}
 
         Respond with ONLY a JSON object:
@@ -234,10 +196,9 @@ class CareerAgent:
                 {{
                     "title": "Specific Role Title",
                     "company": "Company Name",
-                    "skills": ["skill1", "skill2", "skill3"],
                     "location": "{profile.city}",
                     "salary_range": "$X,000 - $Y,000",
-                    "description": "Brief job description highlighting why it fits their interests"
+                    "apply_url": "https://company.com/careers/job-id"
                 }}
             ]
         }}
@@ -285,31 +246,6 @@ class CareerAgent:
         else:
             return ["technology", "business"]
 
-    def _generate_skill_keywords(self, profile: UserProfile) -> list:
-        """Generate personalized skill keywords based on profile"""
-        base_skills = []
-
-        career_lower = profile.career_path.lower()
-        if "software" in career_lower or "developer" in career_lower:
-            base_skills = ["python", "javascript", "react", "api"]
-        elif "data" in career_lower:
-            base_skills = ["sql", "python", "analytics", "machine learning"]
-        elif "product" in career_lower:
-            base_skills = ["agile", "roadmap", "strategy", "analytics"]
-        elif "marketing" in career_lower:
-            base_skills = ["digital marketing", "seo", "analytics", "campaigns"]
-
-        # Add hobby-based skills
-        hobbies_list = [hobby.strip().lower() for hobby in re.split(r'[^a-zA-Z0-9\s]+|\s+', profile.hobbies) if hobby.strip()]
-        for hobby in hobbies_list:
-            if hobby in ["tech", "technology", "coding", "programming"]:
-                base_skills.append("innovation")
-            elif hobby in ["health", "fitness", "gym", "yoga", "running"]:
-                base_skills.append("wellness")
-            elif hobby in ["vegan", "sustainability", "environment"]:
-                base_skills.append("sustainability")
-
-        return base_skills[:4]  # Limit to most relevant
 
     def _extract_jobs_from_companies(self, companies_data: dict, profile: UserProfile) -> list:
         """Extract job opportunities from company search results"""
@@ -327,10 +263,8 @@ class CareerAgent:
                 job = {
                     "title": title,
                     "company": company_name,
-                    "skills": self._generate_skill_keywords(profile),
                     "location": profile.city,
-                    "salary_range": self._estimate_salary_range(profile, title),
-                    "description": f"{title} role at {company_name} in {company_industry} industry"
+                    "salary_range": self._estimate_salary_range(profile, title)
                 }
                 jobs.append(job)
 
@@ -367,10 +301,9 @@ class CareerAgent:
             job = {
                 "title": job_listing.get("title", ""),
                 "company": job_listing.get("company", {}).get("name", ""),
-                "skills": self._extract_skills_from_description(job_listing.get("description", "")),
                 "location": job_listing.get("location", profile.city),
                 "salary_range": self._extract_salary_from_job(job_listing, profile),
-                "description": job_listing.get("description", "")[:100] + "..."
+                "apply_url": job_listing.get("apply_url")
             }
             jobs.append(job)
 
@@ -401,10 +334,9 @@ class CareerAgent:
             job = {
                 "title": job_details.get("title", ""),
                 "company": company_info.get("companyName", ""),
-                "skills": self._extract_skills_from_description(job_details.get("description", "")),
                 "location": job_details.get("formattedLocation", profile.city),
                 "salary_range": salary_range,
-                "description": job_details.get("description", "")[:100] + "..."
+                "apply_url": job_details.get("apply_url")
             }
             jobs.append(job)
 
@@ -436,15 +368,116 @@ class CareerAgent:
 
         return f"${min_sal:,} - ${max_sal:,}"
 
-    def _extract_skills_from_description(self, description: str) -> list:
-        """Extract relevant skills from job description"""
-        common_skills = [
-            "python", "javascript", "react", "node", "sql", "aws", "docker",
-            "kubernetes", "git", "api", "rest", "graphql", "mongodb", "postgres",
-            "machine learning", "data analysis", "agile", "scrum", "typescript"
-        ]
+    def _calculate_job_match_score(self, job: dict, profile: UserProfile) -> int:
+        """Calculate match score using formula: 0.6*career_relevance + 0.25*salary_score + 0.15*distance_score"""
+        import random
 
-        description_lower = description.lower()
-        found_skills = [skill for skill in common_skills if skill in description_lower]
+        # Career relevance (60% weight)
+        career_relevance = self._calculate_career_relevance(job["title"], profile.career_path)
 
-        return found_skills[:4]  # Return top 4 relevant skills
+        # Salary score (25% weight) - higher salaries get higher scores
+        salary_score = self._calculate_salary_score(job.get("salary_range", ""), profile)
+
+        # Distance score (15% weight) - assume all jobs in same city get high score
+        distance_score = 90 if job["location"].lower() == profile.city.lower() else 50
+
+        # Combine scores with weights
+        match = (0.6 * career_relevance + 0.25 * salary_score + 0.15 * distance_score)
+
+        # Add jitter to avoid ties (±2 points)
+        jitter = (random.random() - 0.5) * 4  # -2 to +2
+        final_score = max(0, min(100, int(match + jitter)))
+
+        return final_score
+
+    def _calculate_career_relevance(self, job_title: str, career_path: str) -> float:
+        """Calculate how relevant a job title is to user's career path"""
+        job_lower = job_title.lower()
+        career_lower = career_path.lower()
+
+        # Exact match
+        if career_lower in job_lower or job_lower in career_lower:
+            return 100
+
+        # Keyword overlap
+        job_words = set(job_lower.split())
+        career_words = set(career_lower.split())
+        common_words = job_words.intersection(career_words)
+
+        if common_words:
+            overlap_ratio = len(common_words) / max(len(job_words), len(career_words))
+            return min(100, 60 + (overlap_ratio * 40))
+
+        # Default relevance for same field
+        if any(word in job_lower for word in ["engineer", "developer", "analyst", "manager"]):
+            return 70
+
+        return 50  # Base relevance
+
+    def _calculate_salary_score(self, salary_range: str, profile: UserProfile) -> float:
+        """Calculate salary score - higher salaries get higher scores within reasonable bounds"""
+        if not salary_range or not profile.salary:
+            return 50  # neutral score
+
+        try:
+            # Extract numeric values from salary range
+            import re
+            numbers = re.findall(r'[\d,]+', salary_range.replace(',', ''))
+            if len(numbers) >= 2:
+                min_sal = int(numbers[0])
+                max_sal = int(numbers[1])
+                avg_salary = (min_sal + max_sal) / 2
+
+                # Score based on how salary compares to user expectation
+                if avg_salary >= profile.salary:
+                    # Higher than expected - good score
+                    ratio = min(1.5, avg_salary / profile.salary)  # Cap at 1.5x
+                    return min(100, 60 + ((ratio - 1) * 80))  # 60-100 range
+                else:
+                    # Lower than expected - reduced score
+                    ratio = avg_salary / profile.salary
+                    return max(20, ratio * 60)  # 20-60 range
+        except:
+            pass
+
+        return 50  # Default score
+
+    def _ensure_salary_diversity(self, jobs_data: list, profile: UserProfile) -> list:
+        """Ensure all jobs have unique salary ranges with jitter"""
+        import random
+
+        seen_ranges = set()
+        for job in jobs_data:
+            original_range = job.get("salary_range")
+            if not original_range:
+                # Generate salary if missing
+                job["salary_range"] = self._estimate_salary_range(profile, job["title"])
+
+            # Add jitter to avoid duplicates
+            salary_range = job["salary_range"]
+            counter = 0
+            while salary_range in seen_ranges and counter < 10:
+                # Extract numbers and add jitter
+                try:
+                    import re
+                    numbers = re.findall(r'[\d,]+', salary_range.replace(',', ''))
+                    if len(numbers) >= 2:
+                        min_sal = int(numbers[0])
+                        max_sal = int(numbers[1])
+
+                        # Add ±5-10% jitter
+                        jitter_pct = (random.random() - 0.5) * 0.2  # ±10%
+                        min_sal = int(min_sal * (1 + jitter_pct))
+                        max_sal = int(max_sal * (1 + jitter_pct))
+
+                        salary_range = f"${min_sal:,} - ${max_sal:,}"
+                        counter += 1
+                except:
+                    # Fallback: add suffix
+                    salary_range = f"{original_range} (Negotiable)"
+                    break
+
+            job["salary_range"] = salary_range
+            seen_ranges.add(salary_range)
+
+        return jobs_data
