@@ -65,10 +65,64 @@ class LifestyleAgent:
             print(f"Gemini API failed, using fallback: {e}")
             # Fallback to mock data if Gemini fails
             mock_neighborhoods = [
-                {"name": "Downtown", "tags": ["nightlife", "gym", "walkable"], "match_score": 85},
-                {"name": "Arts District", "tags": ["vegan", "cafes", "galleries"], "match_score": 78},
-                {"name": "Midtown", "tags": ["quiet", "parks", "family"], "match_score": 65},
-                {"name": "University Area", "tags": ["young-professionals", "affordable", "transit"], "match_score": 72}
+                {
+                    "name": "Downtown",
+                    "tags": ["dining", "bar-hopping", "shopping", "theater", "concerts", "dancing",
+                             "people-watching", "walking", "photography", "clubbing", "networking", "wine-tasting",
+                             "comedy-shows", "live-music", "urban-exploration"],
+                    "match_score": 50
+                },
+
+                {
+                    "name": "Arts District",
+                    "tags": ["painting", "photography", "pottery", "sculpture", "gallery-visiting",
+                             "coffee-shop-hopping", "vintage-shopping", "crafting", "music", "writing", "sketching",
+                             "antique-hunting", "art-collecting", "creative-workshops", "indie-films"],
+                    "match_score": 50
+                },
+                {
+                    "name": "Midtown",
+                    "tags": ["jogging", "dog-walking", "picnicking", "playground-visits", "gardening", "reading",
+                             "board-games", "cooking", "baking", "yoga", "meditation", "community-events",
+                             "volunteering", "book-clubs", "family-activities"],
+                    "match_score": 50
+                },
+                {
+                    "name": "University Area",
+                    "tags": ["studying", "trivia-nights", "casual-dining", "coffee-culture", "biking", "frisbee",
+                             "basketball", "gaming", "tutoring", "language-exchange", "debate", "hackathons",
+                             "student-organizations", "cheap-eats", "socializing"],
+                    "match_score": 50
+                },
+                {
+                    "name": "Tech District",
+                    "tags": ["coding", "coworking", "networking", "coffee", "biking", "tech-meetups", "startups",
+                             "innovation", "podcasting", "blogging", "gaming", "VR", "3D-printing", "robotics",
+                             "app-development"],
+                    "match_score": 50
+                },
+                {
+                    "name": "Wellness District",
+                    "tags": ["yoga", "meditation", "pilates", "spa-treatments", "healthy-cooking",
+                             "juice-cleansing", "hiking", "running", "cycling", "rock-climbing", "CrossFit",
+                             "massage", "acupuncture", "tai-chi", "mindfulness"],
+                    "match_score": 50
+                },
+                {
+                    "name": "Historic District",
+                    "tags": ["history", "architecture-tours", "antique-collecting", "museum-visits",
+                             "walking-tours", "genealogy", "historical-research", "vintage-shopping",
+                             "cultural-events", "preservation", "storytelling", "ghost-tours", "local-history",
+                             "heritage-crafts", "archaeology"],
+                    "match_score": 50
+                },
+                {
+                    "name": "Waterfront",
+                    "tags": ["boating", "fishing", "sailing", "kayaking", "swimming", "beach-volleyball", "surfing",
+                             "paddle-boarding", "marine-photography", "sunset-watching", "seafood-dining",
+                             "dock-walking", "water-sports", "windsurfing", "jet-skiing"],
+                    "match_score": 50
+                }
             ]
 
             # Score based on hobby overlap for fallback
