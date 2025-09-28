@@ -1,35 +1,27 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
+import {pages} from "next/dist/build/templates/app-page";
+import Link from "next/link";
 
 type Career =
   | "Software Engineer"
-  | "Frontend Engineer"
-  | "Backend Engineer"
   | "Data Scientist"
   | "Data Analyst"
   | "Product Manager"
-  | "UX/UI Designer"
-  | "Marketing Specialist"
-  | "DevOps Engineer"
-  | "Business Analyst"
-  | "QA Engineer"
+  | "UX Designer"
+  | "Marketing"
   | "Sales"
   | "Operations";
 
 const CAREERS: Career[] = [
   "Software Engineer",
-  "Frontend Engineer",
-  "Backend Engineer",
   "Data Scientist",
   "Data Analyst",
   "Product Manager",
-  "UX/UI Designer",
-  "Marketing Specialist",
-  "DevOps Engineer",
-  "Business Analyst",
-  "QA Engineer",
+  "UX Designer",
+  "Marketing",
   "Sales",
   "Operations",
 ];
@@ -40,10 +32,6 @@ function scoreToBand(score: number): "excellent" | "good" | "fair" | "poor" {
   if (score >= 670) return "good";
   if (score >= 580) return "fair";
   return "poor";
-}
-
-function joinUrl(base: string, path: string): string {
-  return `${base.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
 }
 
 export default function IntakePage() {
@@ -61,34 +49,6 @@ export default function IntakePage() {
   const [credit, setCredit] = useState<string>(""); // 3 digits
 
   const backend = process.env.NEXT_PUBLIC_BACKEND_URL;
-  if (!backend) {
-    throw new Error("NEXT_PUBLIC_BACKEND_URL is not set");
-  }
-
-  // Prefill form from sessionStorage if returning from results
-  useEffect(() => {
-    const savedData = sessionStorage.getItem("nextmove_result");
-    if (savedData) {
-      try {
-        const parsed = JSON.parse(savedData);
-        const profile = parsed.profile;
-        if (profile) {
-          if (profile.name) setName(profile.name);
-          if (profile.location) setLocation(profile.location);
-          if (profile.lifestyle) setLifestyle(profile.lifestyle);
-          if (profile.hobbies) setHobbies(profile.hobbies);
-          if (profile.career) setCareer(profile.career);
-          if (profile.experience !== "" && profile.experience !== undefined)
-            setExperience(profile.experience);
-          if (profile.budget !== "" && profile.budget !== undefined)
-            setBudget(profile.budget);
-          if (profile.credit) setCredit(profile.credit);
-        }
-      } catch {
-        // Ignore parsing errors
-      }
-    }
-  }, []);
 
   const valid = useMemo(() => {
     const creditOk = /^\d{3}$/.test(String(credit || ""));
@@ -106,101 +66,65 @@ export default function IntakePage() {
       return;
     }
 
-    const creditNum = Number(credit);
-    const band = scoreToBand(creditNum);
-
-    const interests = [...lifestyle.split(","), ...hobbies.split(",")]
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    const profile = {
-      name,
-      location,
-      lifestyle,
-      hobbies,
-      career,
-      experience,
-      budget,
-      credit,
-    };
-
-    // Save profile data immediately and navigate to show loading state
-    sessionStorage.setItem(
-      "nextmove_result",
-      JSON.stringify({
-        profile,
-        data: null, // Will be filled by results page
-        loading: true,
-      })
-    );
-
-    // Navigate immediately to show loading state
-    router.push("/results");
-
-    // Continue with fetch in background
     setLoading(true);
-
-    const controller = new AbortController();
-
     try {
+      const creditNum = Number(credit);
+      const band = scoreToBand(creditNum);
+
+      const interests = [...lifestyle.split(","), ...hobbies.split(",")]
+        .map((s) => s.trim())
+        .filter(Boolean);
+
       const body = {
         city: location.trim(),
         budget: Number(budget),
-        credit_score: creditNum,
         credit_band: band,
         interests,
         salary: 0,
         career_path: career,
-        ...(experience !== "" && { experience_years: Number(experience) }),
       };
 
-      const url = joinUrl(backend!, "/api/plan_move");
-      const res = await fetch(url, {
+      const res = await fetch(`${backend}/api/plan_move`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
-        signal: controller.signal,
       });
 
-      if (!res.ok) throw new Error(`Backend returned ${res.status}`);
+      if (!res.ok) throw new Error(`Backend ${res.status}`);
       const data = await res.json();
 
-      // Update sessionStorage with actual results
       sessionStorage.setItem(
         "nextmove_result",
         JSON.stringify({
-          profile,
+          profile: {
+            name,
+            location,
+            lifestyle,
+            hobbies,
+            career,
+            experience,
+            budget,
+            credit,
+          },
           data,
-          loading: false,
         })
       );
+
+      router.push("/results");
     } catch (e: any) {
-      // Handle errors
-      sessionStorage.setItem(
-        "nextmove_result",
-        JSON.stringify({
-          profile,
-          data: null,
-          loading: false,
-          error: e.message || "Something went wrong",
-        })
-      );
+      setErr(e.message || "Something went wrong.");
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
     <main className="screen" role="main">
       {/* Brand */}
-      <div className="brand">
-        <span className="brandDot" aria-hidden />
-        NextMove
-      </div>
+      <Link href="/"><div className="brand">NextMove</div></Link>
 
       {/* Background effects */}
-      <div className="bg" aria-hidden>
-        <div className="noise" />
-        <div className="grid" />
-
+      <div className="bg">
         {/* 10 gradient circles */}
         <div className="blob b1" />
         <div className="blob b2" />
@@ -212,11 +136,9 @@ export default function IntakePage() {
         <div className="blob b8" />
         <div className="blob b9" />
         <div className="blob b10" />
-
         {/* Ambient lighting */}
         <div className="ambient a1" />
         <div className="ambient a2" />
-
         {/* Floating particles */}
         <div className="p p1" />
         <div className="p p2" />
@@ -229,325 +151,241 @@ export default function IntakePage() {
 
       {/* Content */}
       <section className="container">
-        {/* Glass island wrapper for the form area */}
-        <div className="island">
-          <div className="islandShine" aria-hidden />
-          <div className="islandEdge" aria-hidden />
+        <header className="header">
+          <h1 className="title">Tell Us About You</h1>
+          <p className="subtitle">
+            Help us create the perfect plan for your next move.
+          </p>
+        </header>
 
-          <header className="header">
-            <h1 className="title">Tell Us About You</h1>
-            <p className="subtitle">
-              Help us create the perfect plan for your next move.
-            </p>
-          </header>
+        <form className="form" onSubmit={onSubmit} noValidate>
+          {/* Name */}
+          <div className="field">
+            <label className="label" htmlFor="name">
+              Name
+            </label>
+            <input
+              id="name"
+              className="input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Your name"
+              type="text"
+            />
+          </div>
 
-          <form className="form" onSubmit={onSubmit} noValidate>
-            {/* Name */}
-            <div className="field">
-              <label className="label" htmlFor="name">
-                Name
-              </label>
-              <input
-                id="name"
-                className="input"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Your name"
-                type="text"
-              />
+          {/* Location (required) */}
+          <div className="field">
+            <label className="label" htmlFor="location">
+              Location <span className="req">*</span>
+            </label>
+            <input
+              id="location"
+              className="input"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="City, State (e.g., Houston, TX)"
+              required
+              type="text"
+            />
+          </div>
+
+          {/* Lifestyle */}
+          <div className="field">
+            <label className="label" htmlFor="lifestyle">
+              Lifestyle (comma separated)
+            </label>
+            <input
+              id="lifestyle"
+              className="input"
+              value={lifestyle}
+              onChange={(e) => setLifestyle(e.target.value)}
+              placeholder="vegan, nightlife, gym"
+              type="text"
+            />
+          </div>
+
+          {/* Hobbies */}
+          <div className="field">
+            <label className="label" htmlFor="hobbies">
+              Hobbies (comma separated)
+            </label>
+            <input
+              id="hobbies"
+              className="input"
+              value={hobbies}
+              onChange={(e) => setHobbies(e.target.value)}
+              placeholder="climbing, painting, yoga"
+              type="text"
+            />
+          </div>
+
+          {/* Career (required) */}
+          <div className="field">
+            <label className="label" htmlFor="career">
+              Career <span className="req">*</span>
+            </label>
+            <select
+              id="career"
+              className="input select"
+              value={career}
+              onChange={(e) => setCareer(e.target.value as Career)}
+              required
+            >
+              {CAREERS.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Experience */}
+          <div className="field">
+            <label className="label" htmlFor="experience">
+              Experience (years)
+            </label>
+            <input
+              id="experience"
+              className="input"
+              type="number"
+              min={0}
+              value={experience}
+              onChange={(e) =>
+                setExperience(e.target.value === "" ? "" : Number(e.target.value))
+              }
+              placeholder="e.g., 2"
+            />
+          </div>
+
+          {/* Budget (required) */}
+          <div className="field">
+            <label className="label" htmlFor="budget">
+              Budget (monthly USD) <span className="req">*</span>
+            </label>
+            <input
+              id="budget"
+              className="input"
+              type="number"
+              min={0}
+              value={budget}
+              onChange={(e) =>
+                setBudget(e.target.value === "" ? "" : Number(e.target.value))
+              }
+              placeholder="e.g., 1800"
+              required
+            />
+          </div>
+
+          {/* Credit (required) */}
+          <div className="field">
+            <label className="label" htmlFor="credit">
+              Credit score (3 digits) <span className="req">*</span>
+            </label>
+            <input
+              id="credit"
+              className="input"
+              inputMode="numeric"
+              pattern="\d{3}"
+              maxLength={3}
+              value={credit}
+              onChange={(e) => {
+                const v = e.target.value.replace(/\D/g, "").slice(0, 3);
+                setCredit(v);
+              }}
+              placeholder="e.g., 720"
+              required
+            />
+            <small className="helper">
+              We convert this to a band (excellent / good / fair / poor).
+            </small>
+          </div>
+
+          {/* Error */}
+          {err && (
+            <div className="status error" role="alert">
+              {err}
             </div>
+          )}
 
-            {/* Location (required) */}
-            <div className="field">
-              <label className="label" htmlFor="location">
-                Location <span className="req">*</span>
-              </label>
-              <input
-                id="location"
-                className="input"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="City, State (e.g., Houston, TX)"
-                required
-                type="text"
-              />
-            </div>
-
-            {/* Lifestyle */}
-            <div className="field">
-              <label className="label" htmlFor="lifestyle">
-                Lifestyle (comma separated)
-              </label>
-              <input
-                id="lifestyle"
-                className="input"
-                value={lifestyle}
-                onChange={(e) => setLifestyle(e.target.value)}
-                placeholder="vegan, nightlife, gym"
-                type="text"
-              />
-            </div>
-
-            {/* Hobbies */}
-            <div className="field">
-              <label className="label" htmlFor="hobbies">
-                Hobbies (comma separated)
-              </label>
-              <input
-                id="hobbies"
-                className="input"
-                value={hobbies}
-                onChange={(e) => setHobbies(e.target.value)}
-                placeholder="climbing, painting, yoga"
-                type="text"
-              />
-            </div>
-
-            {/* Career (required) */}
-            <div className="field">
-              <label className="label" htmlFor="career">
-                Career <span className="req">*</span>
-              </label>
-              <select
-                id="career"
-                className="input select"
-                value={career}
-                onChange={(e) => setCareer(e.target.value as Career)}
-                required
-              >
-                {CAREERS.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Experience */}
-            <div className="field">
-              <label className="label" htmlFor="experience">
-                Experience (years)
-              </label>
-              <input
-                id="experience"
-                className="input"
-                type="number"
-                min={0}
-                value={experience}
-                onChange={(e) =>
-                  setExperience(
-                    e.target.value === "" ? "" : Number(e.target.value)
-                  )
-                }
-                placeholder="e.g., 2"
-              />
-            </div>
-
-            {/* Budget (required) */}
-            <div className="field">
-              <label className="label" htmlFor="budget">
-                Budget (monthly USD) <span className="req">*</span>
-              </label>
-              <input
-                id="budget"
-                className="input"
-                type="number"
-                min={0}
-                value={budget}
-                onChange={(e) =>
-                  setBudget(e.target.value === "" ? "" : Number(e.target.value))
-                }
-                placeholder="e.g., 1800"
-                required
-              />
-            </div>
-
-            {/* Credit (required) */}
-            <div className="field">
-              <label className="label" htmlFor="credit">
-                Credit score (3 digits) <span className="req">*</span>
-              </label>
-              <input
-                id="credit"
-                className="input"
-                inputMode="numeric"
-                pattern="\d{3}"
-                maxLength={3}
-                value={credit}
-                onChange={(e) => {
-                  const v = e.target.value.replace(/\D/g, "").slice(0, 3);
-                  setCredit(v);
-                }}
-                placeholder="e.g., 720"
-                required
-              />
-              <small className="helper">
-                We convert this to a band (excellent / good / fair / poor).
-              </small>
-            </div>
-
-            {/* Error */}
-            {err && (
-              <div className="status error" role="alert">
-                {err}
-              </div>
-            )}
-
-            {/* Submit */}
-            <div className="actions">
-              <button
-                className="submit"
-                type="submit"
-                disabled={!valid || loading}
-                aria-busy={loading ? "true" : "false"}
-              >
-                {loading ? "Working…" : "Generate my plan"}
-              </button>
-              <button
-                className="reset"
-                type="button"
-                onClick={() => {
-                  setName("");
-                  setLocation("");
-                  setLifestyle("");
-                  setHobbies("");
-                  setCareer("Software Engineer");
-                  setExperience("");
-                  setBudget("");
-                  setCredit("");
-                  setErr(null);
-                }}
-              >
-                Reset
-              </button>
-            </div>
-          </form>
-
-          {/* Decorative bottom glow */}
-          <div className="underGlow" aria-hidden />
-        </div>
+          {/* Submit */}
+          <div className="actions">
+            <button
+              className="submit"
+              type="submit"
+              disabled={!valid || loading}
+              aria-busy={loading ? "true" : "false"}
+            >
+              {loading ? "Working…" : "Generate my plan"}
+            </button>
+            <button
+              className="reset"
+              type="button"
+              onClick={() => {
+                setName("");
+                setLocation("");
+                setLifestyle("");
+                setHobbies("");
+                setCareer("Software Engineer");
+                setExperience("");
+                setBudget("");
+                setCredit("");
+                setErr(null);
+              }}
+            >
+              Reset
+            </button>
+          </div>
+        </form>
       </section>
 
       <style jsx>{`
-        /* Keep your margin requirement */
         :global(html, body) {
-          margin: 9px;
+          margin: px;
           padding: 0;
           background: #000;
-          color-scheme: dark;
-          -webkit-font-smoothing: antialiased;
-          -moz-osx-font-smoothing: grayscale;
-          text-rendering: optimizeLegibility;
         }
-
+        
         .screen {
-          min-height: calc(100vh - 18px); /* account for 9px margin top+bottom */
-          width: calc(100% - 18px); /* account for 9px margin left+right */
+          min-height: 100vh;
+          width: 100%;
           position: relative;
           overflow: hidden;
           background: #000;
           display: flex;
           align-items: flex-start;
           justify-content: center;
-          isolation: isolate;
         }
 
-        /* Brand */
+        /* Brand (Forma at 24px) */
         .brand {
           position: absolute;
-          top: 24px;
-          left: 24px;
+          top: 32px;
+          left: 32px;
           z-index: 20;
-          font-family: Forma, "Forma Fallback", Arial, Helvetica, sans-serif;
-          font-size: 20px;
-          letter-spacing: 0.02em;
-          color: rgba(242, 243, 247, 0.9);
-          display: inline-flex;
-          align-items: center;
-          gap: 10px;
-          padding: 10px 14px;
-          border-radius: 12px;
-          background: linear-gradient(
-              180deg,
-              rgba(255, 255, 255, 0.08),
-              rgba(255, 255, 255, 0.03)
-            )
-            border-box;
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06),
-            0 10px 30px rgba(147, 197, 253, 0.08);
-          backdrop-filter: blur(14px);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-        .brandDot {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          background: radial-gradient(
-            circle at 30% 30%,
-            #b3e1ff 0%,
-            #c4b5fd 60%,
-            #7c3aed 100%
-          );
-          box-shadow: 0 0 18px rgba(147, 197, 253, 0.6);
+          font-family: "Forma", "Forma Fallback", Arial, Helvetica, sans-serif;
+          font-size: 24px;
+          font-weight: 400;
+          color: rgb(237, 237, 237);
+          text-shadow: 0 10px 25px rgba(147, 197, 253, 0.2); /* blue-300/20 */
         }
 
-        /* Background */
+        /* Background container + particles */
         .bg {
           position: absolute;
           inset: 0;
           z-index: 0;
           pointer-events: none;
-        }
-
-        .grid {
-          position: absolute;
-          inset: -1px;
-          background-image: linear-gradient(
-              to right,
-              rgba(255, 255, 255, 0.03) 1px,
-              transparent 1px
-            ),
-            linear-gradient(
-              to bottom,
-              rgba(255, 255, 255, 0.03) 1px,
-              transparent 1px
-            );
-          background-size: 48px 48px, 48px 48px;
-          mask-image: radial-gradient(
-            circle at 50% 50%,
-            black 0%,
-            transparent 70%
-          );
-          opacity: 0.25;
-        }
-        .noise {
-          position: absolute;
-          inset: -1px;
-          opacity: 0.12;
-          mix-blend-mode: soft-light;
-          background-image: url("data:image/svg+xml;utf8,\
-<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'>\
-<filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter>\
-<rect width='120' height='120' filter='url(%23n)' opacity='0.5'/></svg>");
-          background-size: 240px 240px;
-          animation: noiseShift 8s linear infinite;
-        }
-        @keyframes noiseShift {
-          from {
-            transform: translate3d(0, 0, 0);
-          }
-          to {
-            transform: translate3d(-120px, -120px, 0);
-          }
+          opacity: 0.35; /* container opacity for particles */
         }
 
         .blob {
           position: absolute;
           border-radius: 50%;
-          filter: blur(64px);
-          opacity: 0.35;
+          filter: blur(64px); /* blur-3xl */
         }
 
+        /* 10 gradient circles — low-opacity cool hues */
         .b1 {
           width: 384px;
           height: 384px;
@@ -555,8 +393,8 @@ export default function IntakePage() {
           left: 18%;
           background: radial-gradient(
             circle at bottom right,
-            rgba(147, 197, 253, 0.2),
-            rgba(196, 181, 253, 0.12)
+            rgba(147, 197, 253, 0.08),
+            rgba(196, 181, 253, 0.06)
           );
         }
         .b2 {
@@ -566,8 +404,8 @@ export default function IntakePage() {
           right: 20%;
           background: radial-gradient(
             circle at bottom left,
-            rgba(199, 210, 254, 0.18),
-            rgba(191, 219, 254, 0.12)
+            rgba(199, 210, 254, 0.1),
+            rgba(191, 219, 254, 0.08)
           );
         }
         .b3 {
@@ -577,8 +415,8 @@ export default function IntakePage() {
           left: 26%;
           background: radial-gradient(
             circle at top right,
-            rgba(196, 181, 253, 0.15),
-            rgba(221, 214, 254, 0.18)
+            rgba(196, 181, 253, 0.07),
+            rgba(221, 214, 254, 0.09)
           );
         }
         .b4 {
@@ -589,8 +427,8 @@ export default function IntakePage() {
           transform: translateY(-50%);
           background: radial-gradient(
             circle at top left,
-            rgba(165, 243, 252, 0.14),
-            rgba(219, 234, 254, 0.14)
+            rgba(165, 243, 252, 0.07),
+            rgba(219, 234, 254, 0.08)
           );
         }
         .b5 {
@@ -601,8 +439,8 @@ export default function IntakePage() {
           transform: translateX(-50%);
           background: radial-gradient(
             circle at bottom right,
-            rgba(226, 232, 240, 0.12),
-            rgba(199, 210, 254, 0.14)
+            rgba(226, 232, 240, 0.06),
+            rgba(199, 210, 254, 0.07)
           );
         }
         .b6 {
@@ -613,8 +451,8 @@ export default function IntakePage() {
           transform: translateY(-50%);
           background: radial-gradient(
             circle at bottom left,
-            rgba(243, 232, 255, 0.14),
-            rgba(224, 231, 255, 0.12)
+            rgba(243, 232, 255, 0.08),
+            rgba(224, 231, 255, 0.06)
           );
         }
         .b7 {
@@ -624,8 +462,8 @@ export default function IntakePage() {
           right: 60%;
           background: radial-gradient(
             circle at top right,
-            rgba(186, 230, 253, 0.14),
-            rgba(191, 219, 254, 0.14)
+            rgba(186, 230, 253, 0.07),
+            rgba(191, 219, 254, 0.08)
           );
         }
         .b8 {
@@ -635,8 +473,8 @@ export default function IntakePage() {
           left: 70%;
           background: radial-gradient(
             circle at bottom left,
-            rgba(221, 214, 254, 0.12),
-            rgba(196, 181, 253, 0.14)
+            rgba(221, 214, 254, 0.06),
+            rgba(196, 181, 253, 0.07)
           );
         }
         .b9 {
@@ -646,8 +484,8 @@ export default function IntakePage() {
           right: 18%;
           background: radial-gradient(
             circle at top right,
-            rgba(207, 250, 254, 0.14),
-            rgba(219, 234, 254, 0.12)
+            rgba(207, 250, 254, 0.07),
+            rgba(219, 234, 254, 0.06)
           );
         }
         .b10 {
@@ -658,8 +496,8 @@ export default function IntakePage() {
           transform: translateY(-50%);
           background: radial-gradient(
             circle at bottom right,
-            rgba(224, 231, 255, 0.14),
-            rgba(243, 232, 255, 0.12)
+            rgba(224, 231, 255, 0.08),
+            rgba(243, 232, 255, 0.07)
           );
         }
 
@@ -667,8 +505,8 @@ export default function IntakePage() {
         .ambient {
           position: absolute;
           border-radius: 50%;
-          filter: blur(150px);
-          opacity: 0.06;
+          filter: blur(120px);
+          opacity: 0.04;
         }
         .a1 {
           width: 1200px;
@@ -678,22 +516,22 @@ export default function IntakePage() {
           transform: translate(-50%, -50%);
           background: radial-gradient(
             circle,
-            rgba(219, 234, 254, 0.08),
-            rgba(243, 232, 255, 0.04),
-            rgba(0, 0, 0, 0) 70%
+            rgba(219, 234, 254, 0.05),
+            rgba(243, 232, 255, 0.03),
+            transparent 70%
           );
         }
         .a2 {
-          width: 900px;
-          height: 900px;
+          width: 800px;
+          height: 800px;
           top: 18%;
           left: 50%;
           transform: translateX(-50%);
           background: radial-gradient(
             circle,
-            rgba(224, 231, 255, 0.07),
-            rgba(237, 233, 254, 0.03),
-            rgba(0, 0, 0, 0) 70%
+            rgba(224, 231, 255, 0.04),
+            rgba(237, 233, 254, 0.02),
+            transparent 70%
           );
         }
 
@@ -701,161 +539,86 @@ export default function IntakePage() {
         .p {
           position: absolute;
           border-radius: 50%;
-          filter: blur(0.8px);
-          opacity: 0.75;
-          animation: drift 12s ease-in-out infinite, twinkle 3.6s ease-in-out infinite;
-          will-change: transform, opacity;
+          filter: blur(1px);
+          animation: pulse 2s infinite ease-in-out;
+          opacity: 0.6;
         }
         .p1 {
           width: 4px;
           height: 4px;
           left: 20%;
           top: 30%;
-          background: rgba(191, 219, 254, 0.9);
-          animation-delay: 0.2s, 0.2s;
+          background: rgba(191, 219, 254, 0.7); /* blue-200 */
+          animation-delay: 0.2s;
         }
         .p2 {
           width: 8px;
           height: 8px;
           left: 72%;
           top: 28%;
-          background: rgba(196, 181, 253, 0.9);
-          animation-delay: 0.6s, 0.4s;
+          background: rgba(196, 181, 253, 0.7); /* purple-200 */
+          animation-delay: 0.6s;
         }
         .p3 {
           width: 6px;
           height: 6px;
           left: 55%;
           top: 62%;
-          background: rgba(165, 243, 252, 0.9);
-          animation-delay: 1s, 0.6s;
+          background: rgba(165, 243, 252, 0.7); /* cyan-200 */
+          animation-delay: 1s;
         }
         .p4 {
           width: 4px;
           height: 4px;
           left: 35%;
           top: 70%;
-          background: rgba(199, 210, 254, 0.9);
-          animation-delay: 0.8s, 0.1s;
+          background: rgba(199, 210, 254, 0.7); /* indigo-200 */
+          animation-delay: 0.8s;
         }
         .p5 {
           width: 6px;
           height: 6px;
           left: 15%;
           top: 55%;
-          background: rgba(221, 214, 254, 0.9);
-          animation-delay: 0.4s, 0.8s;
+          background: rgba(221, 214, 254, 0.7); /* violet-200 */
+          animation-delay: 0.4s;
         }
         .p6 {
           width: 8px;
           height: 8px;
           left: 82%;
           top: 52%;
-          background: rgba(186, 230, 253, 0.9);
-          animation-delay: 1.2s, 0.5s;
+          background: rgba(186, 230, 253, 0.7); /* sky-200 */
+          animation-delay: 1.2s;
         }
         .p7 {
           width: 4px;
           height: 4px;
           left: 42%;
           top: 18%;
-          background: rgba(243, 232, 255, 0.9);
-          animation-delay: 1s, 0.7s;
+          background: rgba(243, 232, 255, 0.7); /* purple-100 */
+          animation-delay: 1s;
         }
-        @keyframes drift {
-          0% {
-            transform: translate3d(0, 0, 0) scale(1);
-          }
-          50% {
-            transform: translate3d(8px, -6px, 0) scale(1.1);
-          }
-          100% {
-            transform: translate3d(0, 0, 0) scale(1);
-          }
-        }
-        @keyframes twinkle {
+        @keyframes pulse {
           0%,
           100% {
+            transform: scale(1);
             opacity: 0.6;
-            filter: blur(1px);
           }
           50% {
-            opacity: 1;
-            filter: blur(0.4px);
+            transform: scale(1.4);
+            opacity: 0.9;
           }
         }
 
-        /* Container (keep your max-width and paddings) */
+        /* Container + header */
         .container {
           position: relative;
           z-index: 10;
           width: 100%;
-          max-width: 672px; /* keep */
-          padding: 64px 32px; /* keep */
+          max-width: 672px; /* max-w-2xl */
+          padding: 64px 32px; /* py-16 px-8 */
           margin: 0 auto;
-        }
-
-        /* Glass island for the form */
-        .island {
-          position: relative;
-          width: 100%;
-          padding: 32px 24px 40px;
-          border-radius: 24px;
-          background: linear-gradient(
-              180deg,
-              rgba(255, 255, 255, 0.08),
-              rgba(255, 255, 255, 0.04)
-            ),
-            rgba(8, 8, 12, 0.35);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          backdrop-filter: blur(22px) saturate(120%);
-          box-shadow: 0 24px 64px rgba(93, 76, 219, 0.25),
-            inset 0 1px 0 rgba(255, 255, 255, 0.06);
-        }
-        .islandShine {
-          pointer-events: none;
-          position: absolute;
-          inset: 0;
-          border-radius: 24px;
-          background: radial-gradient(
-              800px 240px at 10% -40%,
-              rgba(255, 255, 255, 0.08),
-              transparent 60%
-            ),
-            radial-gradient(
-              700px 320px at 90% -20%,
-              rgba(147, 197, 253, 0.06),
-              transparent 70%
-            );
-          mask-image: linear-gradient(180deg, white, transparent 70%);
-          opacity: 0.55;
-          animation: shine 12s ease-in-out infinite;
-        }
-        .islandEdge {
-          pointer-events: none;
-          position: absolute;
-          inset: -1px;
-          border-radius: 26px;
-          padding: 1px;
-          background: linear-gradient(
-            135deg,
-            rgba(191, 219, 254, 0.35),
-            rgba(196, 181, 253, 0.3),
-            rgba(124, 58, 237, 0.25)
-          );
-          -webkit-mask: linear-gradient(#000 0 0) content-box,
-            linear-gradient(#000 0 0);
-          -webkit-mask-composite: xor;
-          mask-composite: exclude;
-        }
-        @keyframes shine {
-          0%,
-          100% {
-            transform: translateY(0);
-          }
-          50% {
-            transform: translateY(6px);
-          }
         }
 
         .header {
@@ -867,10 +630,10 @@ export default function IntakePage() {
           margin: 0;
           font-family: "Forma", "Forma Fallback", Arial, Helvetica, sans-serif;
           font-weight: 400;
-          font-size: 48px; /* keep */
+          font-size: 48px;
           line-height: 1.15;
-          color: rgba(244, 245, 248, 0.98);
-          text-shadow: 0 12px 28px rgba(196, 181, 253, 0.28);
+          color: rgb(237, 237, 237);
+          text-shadow: 0 12px 28px rgba(196, 181, 253, 0.3); /* purple-300/30 */
         }
 
         .subtitle {
@@ -878,31 +641,27 @@ export default function IntakePage() {
           font-family: "Geist", Arial, "Apple Color Emoji", "Segoe UI Emoji",
             "Segoe UI Symbol", sans-serif;
           font-weight: 400;
-          font-size: 19.62px; /* keep */
-          color: rgba(190, 195, 208, 0.9);
-          text-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+          font-size: 19.62px;
+          color: rgb(136, 136, 136);
+          text-shadow: 0 6px 16px rgba(0, 0, 0, 0.35); /* drop-shadow-lg */
         }
 
         /* Form grid: 1col mobile, 2col md */
         .form {
           display: grid;
-          gap: 24px;
+          row-gap: 24px; /* space-y-6 / gap-6 */
+          column-gap: 128px;
           grid-template-columns: 1fr;
         }
         @media (min-width: 768px) {
           .form {
-            grid-template-columns: 1fr 1fr;
-            gap: 24px 20px;
-          }
-          .field:nth-last-child(2) {
-            grid-column: 1 / -1;
+            grid-template-columns: 1fr 1fr; /* md:grid-cols-2 */
           }
         }
 
         .field {
           display: flex;
           flex-direction: column;
-          gap: 8px;
         }
 
         .label {
@@ -910,8 +669,9 @@ export default function IntakePage() {
             "Segoe UI Symbol", sans-serif;
           font-weight: 400;
           font-size: 14px;
-          color: rgba(244, 245, 248, 0.98);
-          text-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+          color: rgb(237, 237, 237);
+          margin-bottom: 8px; /* mb-2 */
+          text-shadow: 0 6px 16px rgba(0, 0, 0, 0.35); /* drop-shadow-lg */
         }
 
         .req {
@@ -920,98 +680,82 @@ export default function IntakePage() {
 
         .input {
           width: 100%;
-          max-width: 100%;
-          height: 48px;
           font-family: "Geist", Arial, "Apple Color Emoji", "Segoe UI Emoji",
             "Segoe UI Symbol", sans-serif;
           font-weight: 400;
-          font-size: 15px;
-          color: rgba(244, 245, 248, 0.98);
-          padding: 0 16px;
-          border-radius: 12px;
-          border: 1px solid rgba(255, 255, 255, 0.16);
-          background: linear-gradient(
-              180deg,
-              rgba(255, 255, 255, 0.12),
-              rgba(255, 255, 255, 0.06)
-            ),
-            rgba(255, 255, 255, 0.04);
-          backdrop-filter: blur(10px);
+          font-size: 14px;
+          color: rgb(237, 237, 237);
+          padding: 12px 16px; /* py-3 px-4 */
+          border-radius: 10px;
+          border: 1px solid rgba(255, 255, 255, 0.18);
+          background: rgba(255, 255, 255, 0.1); /* bg-white/10 */
+          backdrop-filter: blur(6px);
           outline: none;
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14),
-            0 10px 18px rgba(147, 197, 253, 0.12);
-          transition: transform 160ms ease, box-shadow 180ms ease,
-            background 180ms ease, border-color 180ms ease;
-          display: flex;
-          align-items: center;
+          box-shadow: 0 10px 15px rgba(0, 0, 0, 0.35); /* shadow-lg */
+          transition: background 200ms ease, border-color 200ms ease,
+            box-shadow 200ms ease, transform 150ms ease;
         }
         .input:hover {
-          background: linear-gradient(
-              180deg,
-              rgba(255, 255, 255, 0.16),
-              rgba(255, 255, 255, 0.08)
-            ),
-            rgba(255, 255, 255, 0.06);
-          border-color: rgba(191, 219, 254, 0.3);
-          box-shadow: 0 12px 22px rgba(147, 197, 253, 0.18);
+          background: rgba(255, 255, 255, 0.15); /* bg-white/15 */
+          box-shadow: 0 10px 15px rgba(255, 255, 255, 0.1); /* hover white/10 */
         }
         .input:focus {
-          border-color: rgba(191, 219, 254, 0.45);
-          background: linear-gradient(
-              180deg,
-              rgba(255, 255, 255, 0.18),
-              rgba(255, 255, 255, 0.1)
-            ),
-            rgba(255, 255, 255, 0.07);
+          background: rgba(255, 255, 255, 0.2); /* bg-white/20 */
+          border-color: rgba(255, 255, 255, 0.4); /* border-white/40 */
+          box-shadow: 0 10px 20px rgba(255, 255, 255, 0.12);
           transform: translateY(-1px);
-          box-shadow: 0 14px 28px rgba(147, 197, 253, 0.22);
         }
-
         .select {
           appearance: none;
           background-image: linear-gradient(
               45deg,
               transparent 50%,
-              rgba(237, 237, 237, 0.8) 50%
+              rgba(237, 237, 237, 0.7) 50%
             ),
             linear-gradient(
               135deg,
-              rgba(237, 237, 237, 0.8) 50%,
+              rgba(237, 237, 237, 0.7) 50%,
               transparent 50%
             );
-          background-position: calc(100% - 18px) center,
-            calc(100% - 13px) center;
+          background-position: calc(100% - 18px) calc(1em + 2px),
+            calc(100% - 13px) calc(1em + 2px);
           background-size: 5px 5px, 5px 5px;
           background-repeat: no-repeat;
-          padding-right: 40px;
-        }
-        .select option {
-          background: #0f1115;
-          color: #ededed;
-          padding: 8px 12px;
         }
 
         .helper {
           display: block;
+          margin-top: 6px;
           font-family: "Geist", Arial, "Apple Color Emoji", "Segoe UI Emoji",
             "Segoe UI Symbol", sans-serif;
-          font-size: 12px;
-          color: rgba(190, 195, 208, 0.9);
+          font-size: 12px; /* small helper text */
+          color: rgb(136, 136, 136);
         }
 
         .status {
           grid-column: 1 / -1;
           padding: 12px 16px;
-          border-radius: 12px;
+          border-radius: 10px;
           font-family: "Geist", Arial, "Apple Color Emoji", "Segoe UI Emoji",
             "Segoe UI Symbol", sans-serif;
           font-size: 16px;
           backdrop-filter: blur(6px);
         }
+        
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+          /* display: none; <- Crashes Chrome on hover */
+          -webkit-appearance: none;
+          margin: 0; /* <-- Apparently some margin are still there even though it's hidden */
+        }
+
+        input[type=number] {
+          -moz-appearance:textfield; /* Firefox */
+        }
         .status.error {
-          background: rgba(239, 68, 68, 0.18);
-          border: 1px solid rgba(239, 68, 68, 0.35);
-          color: #ef4444;
+          background: rgba(239, 68, 68, 0.2); /* bg-red-500/20 */
+          border: 1px solid rgba(239, 68, 68, 0.4); /* border-red-500/40 */
+          color: #ef4444; /* error text */
         }
 
         .actions {
@@ -1023,102 +767,53 @@ export default function IntakePage() {
         }
 
         .submit {
-          padding: 16px 32px;
-          border-radius: 12px;
-          border: 1px solid rgba(255, 255, 255, 0.16);
+          padding: 16px 32px; /* py-4 px-8 */
+          border-radius: 10px;
+          border: none;
           cursor: pointer;
           font-family: "Geist", Arial, "Apple Color Emoji", "Segoe UI Emoji",
             "Segoe UI Symbol", sans-serif;
           font-size: 16px;
-          font-weight: 500;
-          color: rgba(244, 245, 248, 0.95);
-          background: linear-gradient(
-              180deg,
-              rgba(255, 255, 255, 0.16),
-              rgba(255, 255, 255, 0.08)
-            ),
-            rgba(255, 255, 255, 0.06);
-          box-shadow: 0 25px 50px rgba(147, 197, 253, 0.22),
-            inset 0 1px 0 rgba(255, 255, 255, 0.14);
-          backdrop-filter: blur(10px);
+          font-weight: 400;
+          color: rgb(136, 136, 136);
+          background: rgba(255, 255, 255, 0.9); /* bg-white/90 */
+          box-shadow: 0 25px 50px rgba(255, 255, 255, 0.2); /* shadow-2xl white/20 */
+          backdrop-filter: blur(4px);
           transform-origin: center;
-          transition: transform 240ms, box-shadow 240ms, background 240ms,
-            border-color 240ms;
-          height: 56px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+          transition: all 300ms;
         }
         .submit:hover {
-          transform: translateY(-2px) scale(1.02);
-          background: linear-gradient(
-              180deg,
-              rgba(255, 255, 255, 0.2),
-              rgba(255, 255, 255, 0.1)
-            ),
-            rgba(255, 255, 255, 0.07);
-          border-color: rgba(191, 219, 254, 0.4);
-          box-shadow: 0 30px 64px rgba(147, 197, 253, 0.28),
-            inset 0 1px 0 rgba(255, 255, 255, 0.2);
+          transform: scale(1.05) translateY(-1px); /* hover:-translate-y-1 */
+          background: rgba(255, 255, 255, 1);
+          box-shadow: 0 30px 60px rgba(255, 255, 255, 0.3); /* hover white/30 */
         }
         .submit:disabled {
-          opacity: 0.6;
+          opacity: 0.5;
           pointer-events: none;
         }
 
         .reset {
-          padding: 12px 20px;
-          border-radius: 12px;
-          border: 1px solid rgba(255, 255, 255, 0.12);
-          background: rgba(255, 255, 255, 0.04);
-          color: rgba(244, 245, 248, 0.95);
+          padding: 10px 16px;
+          border-radius: 8px;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          background: rgba(255, 255, 255, 0.1);
+          color: rgb(237, 237, 237);
           font-family: "Geist", Arial, "Apple Color Emoji", "Segoe UI Emoji",
             "Segoe UI Symbol", sans-serif;
           font-size: 14px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: transform 160ms, background 180ms, border-color 180ms;
-          height: 48px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
-          backdrop-filter: blur(6px);
+          font-weight: 400;
+          transition: background 200ms ease, border-color 200ms ease,
+            transform 150ms ease;
         }
         .reset:hover {
+          background: rgba(255, 255, 255, 0.15);
+          border-color: rgba(255, 255, 255, 0.35);
           transform: translateY(-1px);
-          background: rgba(255, 255, 255, 0.06);
-          border-color: rgba(221, 214, 254, 0.35);
-        }
-
-        .underGlow {
-          position: absolute;
-          left: 50%;
-          bottom: -26px;
-          transform: translateX(-50%);
-          width: 62%;
-          height: 36px;
-          background: radial-gradient(
-            60% 100% at 50% 0%,
-            rgba(147, 197, 253, 0.22),
-            rgba(0, 0, 0, 0) 70%
-          );
-          filter: blur(10px);
-          opacity: 0.55;
-        }
-
-        @media (min-width: 768px) {
-          .field {
-            max-width: 100%;
-          }
-          .input {
-            max-width: 280px; /* keep your control width guard */
-          }
         }
 
         @media (max-width: 768px) {
           .title {
-            font-size: 36px; /* keep */
+            font-size: 36px;
           }
         }
       `}</style>

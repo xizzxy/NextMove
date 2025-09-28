@@ -5,9 +5,9 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-# keep offline-friendly
+
+# Load environment variables
 load_dotenv()
-os.environ.setdefault("GOOGLE_API_KEY", "")
 
 from agents.housing_agent.agent import HousingAgent
 from agents.lifestyle_agent.agent import LifestyleAgent

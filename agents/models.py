@@ -10,7 +10,6 @@ class UserProfile(BaseModel):
     budget: int
     credit_band: Optional[Literal["excellent", "good", "fair", "poor"]] = None
     credit_score: Optional[int] = None
-    interests: List[str] = []
     lifestyle: str = ""
     hobbies: str = ""
     career_path: str
@@ -56,7 +55,6 @@ class Place(BaseModel):
 
 class LifestyleOutput(BaseModel):
     primary_fit: NeighborhoodFit
-    alternatives: List[NeighborhoodFit]
     explanation: str
     places: List[Place] = []
 

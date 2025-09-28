@@ -66,7 +66,7 @@ export default function HomePage() {
             Next Move?
           </h1>
 
-          <p className="subtitle">Make your next move the best one yet.</p>
+        <p className="subtitle">Make Your Next Move the Best One Yet</p>
 
           <div className="cta">
             <button
