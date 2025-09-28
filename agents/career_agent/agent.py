@@ -155,7 +155,7 @@ class CareerAgent:
             job_params = {
                 "keywords": search_query,
                 "location": profile.city,
-                "limit": 5
+                "limit": 10
             }
 
             print(f"Searching jobs: {job_url}")
@@ -178,7 +178,7 @@ class CareerAgent:
         existing_companies = [job.get("company", "") for job in existing_jobs]
 
         prompt = f"""
-        Generate {5 - len(existing_jobs)} additional job opportunities in {profile.city} for:
+        Generate {10 - len(existing_jobs)} additional job opportunities in {profile.city} for:
         - Career: {profile.career_path}
         - Experience: {profile.experience_years} years
         - Salary expectation: ${profile.salary}
@@ -324,7 +324,7 @@ class CareerAgent:
         jobs = []
         job_elements = data.get("elements", [])
 
-        for job_element in job_elements[:5]:
+        for job_element in job_elements[:10]:
             job_details = job_element.get("jobPostingInfo", {})
             company_info = job_element.get("companyDetails", {})
 

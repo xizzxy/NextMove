@@ -7,7 +7,13 @@
       "Bash(python:*)",
       "Bash(npm run dev:*)",
       "Bash(curl -X POST http://127.0.0.1:8000/api/plan_move -H \"Content-Type: application/json\" -d '{\"\"city\"\": \"\"Houston, TX\"\", \"\"budget\"\": 2000, \"\"credit_score\"\": 720, \"\"credit_band\"\": \"\"excellent\"\", \"\"interests\"\": [\"\"gym\"\", \"\"nightlife\"\"], \"\"salary\"\": 0, \"\"career_path\"\": \"\"Software Engineer\"\"}')",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(git rm:*)",
+      "Bash(npm install:*)",
+      "Bash(taskkill:*)",
+      "Bash(curl -s http://127.0.0.1:8000)",
+      "Bash(PYTHONPATH=. python backend/main.py)",
+      "Bash(curl -s -X POST http://127.0.0.1:8000/api/plan_move -H \"Content-Type: application/json\" -d '{\"\"\"\"city\"\"\"\": \"\"\"\"Houston, TX\"\"\"\", \"\"\"\"budget\"\"\"\": 2000, \"\"\"\"credit_score\"\"\"\": 720, \"\"\"\"credit_band\"\"\"\": \"\"\"\"excellent\"\"\"\", \"\"\"\"interests\"\"\"\": [\"\"\"\"gym\"\"\"\", \"\"\"\"nightlife\"\"\"\"], \"\"\"\"salary\"\"\"\": 75000, \"\"\"\"career_path\"\"\"\": \"\"\"\"Software Engineer\"\"\"\"}')"
     ],
     "deny": [],
     "ask": []

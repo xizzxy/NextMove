@@ -253,14 +253,14 @@ class HousingAgent:
     async def _generate_with_gemini(self, profile: UserProfile, max_budget: int, preferred_neighborhoods: list, user_interests: list) -> list:
         """Generate apartment listings using Gemini as fallback"""
         prompt = f"""
-        Generate 4-6 realistic apartment listings for {profile.city} with this criteria:
-        - Budget range: ${max_budget-300} to ${max_budget+500}/month
+        Generate 15 realistic apartment listings for {profile.city} with this criteria:
+        - Budget range: ${max_budget-300} to ${max_budget+500}/month. each rent price is different
         - Target neighborhoods: {', '.join(preferred_neighborhoods)}
         - User interests: {', '.join(user_interests)}
 
         For each listing, include:
         - Realistic address in {profile.city}
-        - Rent amount
+        - Rent amount (every rent is different by at least $50)
         - Minimum credit score requirement (range 600-750)
         - 2-4 relevant amenities that might appeal to someone interested in: {', '.join(user_interests)}
         - Realistic lat/lng coordinates for {profile.city}

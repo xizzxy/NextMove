@@ -19,6 +19,9 @@ const GoogleMapComponent = dynamic(() => import("./GoogleMapComponent"), { ssr: 
 // Light Map component
 const LightMapComponent = dynamic(() => import("./LightMapComponent"), { ssr: false });
 
+// Mapbox component
+const MapboxMapComponent = dynamic(() => import("./MapboxMapComponent"), { ssr: false });
+
 // Loading skeleton component
 const LoadingSkeleton = dynamic(() => import("./LoadingSkeleton"), { ssr: false });
 
@@ -839,7 +842,17 @@ export default function ResultsPage() {
               {activeTab === "map" && mapLoaded && (
                 <div className="tab-panel map-panel">
                   <div className="map-container">
-                    {mapsProvider === "google" ? (
+                    {mapsProvider === "mapbox" ? (
+                      <MapboxMapComponent
+                        center={{ lat: center[0], lng: center[1] }}
+                        listings={sortedListings}
+                        places={sortedPlaces}
+                        hoveredListing={hoveredListing}
+                        selectedListing={selectedListing}
+                        onMarkerHover={setHoveredListing}
+                        onMarkerClick={setSelectedListing}
+                      />
+                    ) : mapsProvider === "google" ? (
                       <GoogleMapComponent
                         center={{ lat: center[0], lng: center[1] }}
                         listings={sortedListings}
