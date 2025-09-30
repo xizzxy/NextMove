@@ -50,7 +50,7 @@ Built over 36 hours during ShellHacks 2025 in Miami, FL, NextMove transforms hou
 ```bash
 # Clone the repository
 git clone https://github.com/yourusername/nextmove.git
-cd nextmove
+cd NextMove
 
 # Install frontend dependencies
 cd frontend
