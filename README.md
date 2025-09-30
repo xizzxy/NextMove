@@ -38,7 +38,7 @@ Built over 36 hours during ShellHacks 2025 in Miami, FL, NextMove transforms hou
 - [Mapbox API](https://www.mapbox.com/) - Mapping for apartment locations
 - Python - Backend logic and agent orchestration
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
