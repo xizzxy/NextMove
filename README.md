@@ -1,8 +1,6 @@
 
 # NextMove 🏡
 
-**Your AI-powered relocation companion**
-
 Built over 36 hours during ShellHacks 2025 in Miami, FL, NextMove transforms hours of scattered research into one comprehensive search. Our web application leverages 4 parallel AI agents to consolidate everything you need to relocate with confidence—all in one place.
 
 ## 🎯 What It Does
